@@ -72,7 +72,7 @@ services:
     command: ["-path=/migrations", "-database=postgres://pvp:pvp@postgres:5432/pvp?sslmode=disable", "up"]
     restart: on-failure
 
-  # ─── Services ─────────────────────────────────────────────────────
+  # ─── Backend Services ─────────────────────────────────────────────
   api-gateway:
     build: ./services/api-gateway
     container_name: pvp-api-gateway
@@ -81,6 +81,7 @@ services:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8080:8080"
@@ -93,6 +94,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8081:8081"
@@ -105,6 +107,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8082:8082"
@@ -117,6 +120,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8083:8083"
@@ -129,6 +133,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8085:8085"
@@ -141,6 +146,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8087:8087"
@@ -153,6 +159,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8086:8086"
@@ -165,7 +172,22 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
+      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8084:8084"
+    restart: unless-stopped
+
+  # ─── Frontend ─────────────────────────────────────────────────────
+  frontend:
+    build: ./frontend
+    container_name: pvp-frontend
+    networks: [pvp-net]
+    depends_on:
+      - api-gateway
+    environment:
+      NEXT_PUBLIC_API_URL: http://api-gateway:8080
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
     restart: unless-stopped

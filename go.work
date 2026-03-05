@@ -8,6 +8,10 @@ use (
 	./pkg/apierror
 	./pkg/crypto
 	./pkg/pagination
+	./pkg/ratelimit
+	./pkg/circuitbreaker
+	./pkg/retry
+	./pkg/metrics
 	./services/api-gateway
 	./services/user-service
 	./services/proxy-service

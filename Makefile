@@ -1,6 +1,7 @@
-.PHONY: help dev build-all test-all lint fmt migrate-up migrate-down infra-up infra-down
+.PHONY: help dev build-all test-all lint fmt migrate-up migrate-down infra-up infra-down monitoring-up frontend-dev
 
 SERVICES := api-gateway user-service proxy-service vps-service billing-service log-service notification-service reseller-service
+PKGS    := nats postgres logger middleware apierror crypto pagination ratelimit circuitbreaker retry metrics
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -84,6 +85,24 @@ tidy-all: ## go mod tidy for all modules
 	@for svc in $(SERVICES); do \
 		(cd services/$$svc && go mod tidy); \
 	done
-	@for pkg in nats postgres logger middleware apierror crypto pagination; do \
+	@for pkg in $(PKGS); do \
 		(cd pkg/$$pkg && go mod tidy); \
 	done
+	(cd infrastructure/proxmox && go mod tidy)
+	(cd infrastructure/providers && go mod tidy)
+
+# ─── Monitoring ───────────────────────────────────────────────────────────────
+monitoring-up: ## Start monitoring stack (Prometheus + Grafana)
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d prometheus grafana alertmanager postgres-exporter redis-exporter
+	@echo "Grafana:    http://localhost:3001  (admin / pvpadmin)"
+	@echo "Prometheus: http://localhost:9090"
+
+monitoring-down: ## Stop monitoring stack
+	docker compose -f docker-compose.yml -f docker-compose.monitoring.yml down prometheus grafana alertmanager postgres-exporter redis-exporter
+
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+frontend-dev: ## Run Next.js frontend in dev mode
+	cd frontend && npm install && npm run dev
+
+frontend-build: ## Build Next.js frontend
+	cd frontend && npm install && npm run build
