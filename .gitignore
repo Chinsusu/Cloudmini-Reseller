@@ -1,0 +1,35 @@
+# Git
+.git/
+
+# Go build artifacts
+bin/
+dist/
+
+# Environment files (contain secrets)
+.env
+*.env.local
+*.env.*.local
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Go vendor
+vendor/
+
+# Test coverage
+*.out
+coverage.html
+
+# Logs
+*.log
+
+# Temporary
+tmp/

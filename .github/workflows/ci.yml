@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - api-gateway
+          - user-service
+          - proxy-service
+          - vps-service
+          - billing-service
+          - log-service
+          - notification-service
+          - reseller-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          working-directory: services/${{ matrix.service }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pvp
+          POSTGRES_PASSWORD: pvp
+          POSTGRES_DB: pvp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      nats:
+        image: nats:2.10-alpine
+        ports: ["4222:4222", "8222:8222"]
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8222/healthz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://pvp:pvp@localhost:5432/pvp?sslmode=disable
+      REDIS_URL: redis://localhost:6379
+      NATS_URL: nats://localhost:4222
+      JWT_SECRET: test-secret-that-is-at-least-32-chars-long
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Run migrations
+        run: |
+          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+          migrate -path migrations -database "$DATABASE_URL" up
+      - name: Run all tests
+        run: |
+          for svc in api-gateway user-service proxy-service vps-service billing-service log-service notification-service reseller-service; do
+            echo "=== Testing $svc ==="
+            (cd services/$svc && go test ./... -race -count=1) || exit 1
+          done
+          for pkg in logger apierror crypto pagination; do
+            echo "=== Testing pkg/$pkg ==="
+            (cd pkg/$pkg && go test ./... -race -count=1) || exit 1
+          done
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+      - name: Build all services
+        run: |
+          for svc in api-gateway user-service proxy-service vps-service billing-service log-service notification-service reseller-service; do
+            echo "Building $svc..."
+            (cd services/$svc && go build ./...) || exit 1
+          done
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [lint, test, build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: echo "TODO: add deploy-staging script"

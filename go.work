@@ -1,0 +1,21 @@
+go 1.22
+
+use (
+	./pkg/nats
+	./pkg/postgres
+	./pkg/logger
+	./pkg/middleware
+	./pkg/apierror
+	./pkg/crypto
+	./pkg/pagination
+	./services/api-gateway
+	./services/user-service
+	./services/proxy-service
+	./services/vps-service
+	./services/billing-service
+	./services/log-service
+	./services/notification-service
+	./services/reseller-service
+	./infrastructure/proxmox
+	./infrastructure/providers
+)
