@@ -1,0 +1,103 @@
+{
+  "title": "PVP Platform Overview",
+  "uid": "pvp-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total HTTP Requests (1m)",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "sum(rate(pvp_api_gateway_http_requests_total[1m])) * 60",
+        "legendFormat": "req/min"
+      }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "P99 Latency (api-gateway)",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "targets": [{
+        "expr": "histogram_quantile(0.99, rate(pvp_api_gateway_http_request_duration_seconds_bucket[5m]))",
+        "legendFormat": "p99"
+      }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Active VPS Instances",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "targets": [{
+        "expr": "pvp_vps_service_active_instances{type=\"vps\"}",
+        "legendFormat": "instances"
+      }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Wallet Transactions (1m)",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "targets": [{
+        "expr": "sum(rate(pvp_billing_service_wallet_transactions_total[1m])) * 60",
+        "legendFormat": "tx/min"
+      }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "HTTP Request Rate by Service",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [
+        {"expr": "sum(rate(pvp_api_gateway_http_requests_total[1m])) by (status)", "legendFormat": "gateway {{status}}"},
+        {"expr": "sum(rate(pvp_user_service_http_requests_total[1m])) by (status)", "legendFormat": "user {{status}}"},
+        {"expr": "sum(rate(pvp_billing_service_http_requests_total[1m])) by (status)", "legendFormat": "billing {{status}}"},
+        {"expr": "sum(rate(pvp_proxy_service_http_requests_total[1m])) by (status)", "legendFormat": "proxy {{status}}"},
+        {"expr": "sum(rate(pvp_vps_service_http_requests_total[1m])) by (status)", "legendFormat": "vps {{status}}"}
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP Latency Percentiles (api-gateway)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(pvp_api_gateway_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, rate(pvp_api_gateway_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, rate(pvp_api_gateway_http_request_duration_seconds_bucket[5m]))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Circuit Breaker States",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+      "targets": [{
+        "expr": "pvp_proxy_service_circuit_breaker_state",
+        "legendFormat": "proxy: {{name}}"
+      }]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "NATS Messages (published vs consumed)",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+      "targets": [
+        {"expr": "sum(rate(pvp_billing_service_nats_published_total[1m])) * 60", "legendFormat": "published/min"},
+        {"expr": "sum(rate(pvp_billing_service_nats_consumed_total[1m])) * 60", "legendFormat": "consumed/min"}
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Orders Created (proxy + vps)",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+      "targets": [
+        {"expr": "rate(pvp_proxy_service_orders_total{status=\"fulfilled\"}[5m]) * 300", "legendFormat": "proxy orders"},
+        {"expr": "rate(pvp_vps_service_orders_total{status=\"running\"}[5m]) * 300", "legendFormat": "vps instances"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: production
+    platform: pvp
+
+# Alerting
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Rules files
+rule_files:
+  - "alerts/*.yml"
+
+scrape_configs:
+  # System metrics
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # PVP Services
+  - job_name: api-gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api-gateway:8080']
+
+  - job_name: user-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['user-service:8081']
+
+  - job_name: proxy-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['proxy-service:8082']
+
+  - job_name: vps-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['vps-service:8083']
+
+  - job_name: reseller-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['reseller-service:8084']
+
+  - job_name: billing-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['billing-service:8085']
+
+  - job_name: notification-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['notification-service:8086']
+
+  - job_name: log-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['log-service:8087']
+
+  # Infrastructure
+  - job_name: postgres
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: redis
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: nats
+    static_configs:
+      - targets: ['nats:8222']
+    metrics_path: /metrics
