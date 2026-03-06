@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 
@@ -79,10 +80,16 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// r.RemoteAddr is "IP:port" — strip port for inet DB column
+	ip := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		ip = host
+	}
+
 	result, err := h.authUC.Login(r.Context(), usecase.LoginRequest{
 		Email:     req.Email,
 		Password:  req.Password,
-		IPAddress: r.RemoteAddr,
+		IPAddress: ip,
 		UserAgent: r.UserAgent(),
 	})
 	if err != nil {

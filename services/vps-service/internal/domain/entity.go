@@ -22,75 +22,82 @@ const (
 )
 
 // Plan represents a VPS plan (e.g. "Starter 1", "GPU Pro").
+// Fields match vps.plans table columns.
 type Plan struct {
 	ID          uuid.UUID       `db:"id"`
 	Name        string          `db:"name"`
-	CPU         int             `db:"cpu"`
+	Slug        string          `db:"slug"`
+	CPU         int             `db:"cpu_cores"`
 	RAMMB       int             `db:"ram_mb"`
 	DiskGB      int             `db:"disk_gb"`
 	BandwidthGB int             `db:"bandwidth_gb"`
-	OSType      string          `db:"os_type"`
-	Template    string          `db:"template"`
 	HourlyRate  decimal.Decimal `db:"hourly_rate"`
 	MonthlyRate decimal.Decimal `db:"monthly_rate"`
 	IsActive    bool            `db:"is_active"`
 	CreatedAt   time.Time       `db:"created_at"`
+	// OSType and Template are derived from os_templates array — use Slug for provisioning
+	OSType   string `db:"-"` // not stored directly
+	Template string `db:"-"` // not stored directly
 }
 
 // Node represents a Proxmox node managed by the platform.
 type Node struct {
-	ID           uuid.UUID       `db:"id"`
-	Name         string          `db:"name"`         // pve1, pve2, ...
-	DisplayName  string          `db:"display_name"`
-	Location     string          `db:"location"`
-	ProxmoxHost  string          `db:"proxmox_host"`
-	ProxmoxPort  int             `db:"proxmox_port"`
-	TotalCPU     int             `db:"total_cpu"`
-	TotalRAMMB   int             `db:"total_ram_mb"`
-	TotalDiskGB  int             `db:"total_disk_gb"`
-	ReservedCPU  int             `db:"reserved_cpu"`
-	ReservedRAMMB int            `db:"reserved_ram_mb"`
-	ReservedDiskGB int           `db:"reserved_disk_gb"`
-	Status       string          `db:"status"` // online|maintenance|offline
-	CreatedAt    time.Time       `db:"created_at"`
-	UpdatedAt    time.Time       `db:"updated_at"`
+	ID             uuid.UUID `db:"id"`
+	Name           string    `db:"name"`          // pve1, pve2, ...
+	DisplayName    string    `db:"display_name"`
+	Location       string    `db:"location"`
+	ProxmoxHost    string    `db:"proxmox_host"`
+	ProxmoxPort    int       `db:"proxmox_port"`
+	TotalCPU       int       `db:"total_cpu"`
+	TotalRAMMB     int       `db:"total_ram_mb"`
+	TotalDiskGB    int       `db:"total_disk_gb"`
+	ReservedCPU    int       `db:"reserved_cpu"`
+	ReservedRAMMB  int       `db:"reserved_ram_mb"`
+	ReservedDiskGB int       `db:"reserved_disk_gb"`
+	Status         string    `db:"status"` // online|maintenance|offline
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
 }
 
 // AvailableRAMMB returns available RAM with 20% headroom for the given plan.
 func (n *Node) AvailableRAMMB() int { return n.TotalRAMMB - n.ReservedRAMMB }
 
 // Instance represents a user's VPS instance.
+// Fields match vps.instances table columns.
 type Instance struct {
-	ID              uuid.UUID       `db:"id"`
-	UserID          uuid.UUID       `db:"user_id"`
-	ResellerID      *uuid.UUID      `db:"reseller_id"`
-	PlanID          uuid.UUID       `db:"plan_id"`
-	NodeID          uuid.UUID       `db:"node_id"`
-	NodeName        string          `db:"node_name"`
-	VMID            int             `db:"vmid"`
-	Hostname        string          `db:"hostname"`
-	Status          string          `db:"status"`
-	IPAddress       string          `db:"ip_address"`
-	SSHPort         int             `db:"ssh_port"`
-	RootPassword    string          `db:"root_password"` // encrypted
-	BillingStartedAt *time.Time     `db:"billing_started_at"`
-	LastBilledAt    *time.Time      `db:"last_billed_at"`
-	SuspendedAt     *time.Time      `db:"suspended_at"`
-	TerminatedAt    *time.Time      `db:"terminated_at"`
-	IdempotencyKey  string          `db:"idempotency_key"`
-	CreatedAt       time.Time       `db:"created_at"`
-	UpdatedAt       time.Time       `db:"updated_at"`
+	ID              uuid.UUID      `db:"id"`
+	InstanceNumber  string         `db:"instance_number"`
+	UserID          uuid.UUID      `db:"user_id"`
+	ResellerID      *uuid.UUID     `db:"reseller_id"`
+	PlanID          uuid.UUID      `db:"plan_id"`
+	NodeID          uuid.UUID      `db:"node_id"`
+	NodeName        string         `db:"-"` // derived from node join
+	VMID            int            `db:"vmid"`
+	Hostname        string         `db:"hostname"`
+	Status          string         `db:"status"`
+	IPAddress       string         `db:"ip_address"`
+	SSHPort         int            `db:"ssh_port"`
+	RootPassword    string         `db:"root_password"` // encrypted
+	CPU             int            `db:"cpu_cores"`
+	RAMMB           int            `db:"ram_mb"`
+	DiskGB          int            `db:"disk_gb"`
+	BillingStartedAt *time.Time   `db:"billing_started_at"`
+	LastBilledAt    *time.Time     `db:"last_billed_at"`
+	SuspendedAt     *time.Time     `db:"suspended_at"`
+	TerminatedAt    *time.Time     `db:"terminated_at"`
+	IdempotencyKey  string         `db:"-"` // not a db column in new schema
+	CreatedAt       time.Time      `db:"created_at"`
 }
 
 // Snapshot represents a VM snapshot.
 type Snapshot struct {
-	ID         uuid.UUID  `db:"id"`
-	InstanceID uuid.UUID  `db:"instance_id"`
-	Name       string     `db:"name"`
-	ProxmoxName string    `db:"proxmox_name"`
-	Description string    `db:"description"`
-	SizeGB     decimal.Decimal `db:"size_gb"`
-	CreatedAt  time.Time  `db:"created_at"`
+	ID          uuid.UUID       `db:"id"`
+	InstanceID  uuid.UUID       `db:"instance_id"`
+	Name        string          `db:"name"`
+	ProxmoxName string          `db:"proxmox_name"`
+	Description string          `db:"description"`
+	SizeGB      decimal.Decimal `db:"size_gb"`
+	CreatedAt   time.Time       `db:"created_at"`
 }
 
 // ─── Repository Interfaces ────────────────────────────────────────────────────

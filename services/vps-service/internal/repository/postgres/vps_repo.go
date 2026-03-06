@@ -18,9 +18,15 @@ type PlanRepository struct{ db *sqlx.DB }
 
 func NewPlanRepository(db *sqlx.DB) *PlanRepository { return &PlanRepository{db: db} }
 
+const planCols = `id, name, slug, cpu_cores, ram_mb, disk_gb,
+	COALESCE(bandwidth_gb, 0) AS bandwidth_gb,
+	hourly_rate, COALESCE(monthly_rate, 0) AS monthly_rate,
+	is_active, created_at`
+
 func (r *PlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Plan, error) {
 	var p domain.Plan
-	if err := r.db.GetContext(ctx, &p, `SELECT * FROM vps.plans WHERE id=$1`, id); err != nil {
+	q := `SELECT ` + planCols + ` FROM vps.plans WHERE id=$1`
+	if err := r.db.GetContext(ctx, &p, q, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrPlanNotFound
 		}
@@ -31,7 +37,8 @@ func (r *PlanRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pla
 
 func (r *PlanRepository) List(ctx context.Context) ([]*domain.Plan, error) {
 	var plans []*domain.Plan
-	if err := r.db.SelectContext(ctx, &plans, `SELECT * FROM vps.plans WHERE is_active=true ORDER BY monthly_rate ASC`); err != nil {
+	q := `SELECT ` + planCols + ` FROM vps.plans WHERE is_active=true ORDER BY monthly_rate ASC`
+	if err := r.db.SelectContext(ctx, &plans, q); err != nil {
 		return nil, fmt.Errorf("PlanRepository.List: %w", err)
 	}
 	return plans, nil
