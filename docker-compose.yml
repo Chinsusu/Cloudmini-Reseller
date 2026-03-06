@@ -1,5 +1,3 @@
-version: "3.9"
-
 networks:
   pvp-net:
     driver: bridge
@@ -54,125 +52,136 @@ services:
     volumes:
       - nats-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz | grep -q ok"]
+      test: ["CMD-SHELL", "nc -z localhost 4222 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # ─── Migrate ──────────────────────────────────────────────────────
-  migrate:
-    image: migrate/migrate:v4
-    container_name: pvp-migrate
-    networks: [pvp-net]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./migrations:/migrations
-    command: ["-path=/migrations", "-database=postgres://pvp:pvp@postgres:5432/pvp?sslmode=disable", "up"]
-    restart: on-failure
-
-  # ─── Backend Services ─────────────────────────────────────────────
+  # ─── Backend Services (shared Dockerfile.service) ─────────────────
   api-gateway:
-    build: ./services/api-gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: api-gateway
     container_name: pvp-api-gateway
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8080:8080"
     restart: unless-stopped
 
   user-service:
-    build: ./services/user-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: user-service
     container_name: pvp-user-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8081:8081"
     restart: unless-stopped
 
   proxy-service:
-    build: ./services/proxy-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: proxy-service
     container_name: pvp-proxy-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8082:8082"
     restart: unless-stopped
 
   vps-service:
-    build: ./services/vps-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: vps-service
     container_name: pvp-vps-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8083:8083"
     restart: unless-stopped
 
   billing-service:
-    build: ./services/billing-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: billing-service
     container_name: pvp-billing-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8085:8085"
     restart: unless-stopped
 
   log-service:
-    build: ./services/log-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: log-service
     container_name: pvp-log-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8087:8087"
     restart: unless-stopped
 
   notification-service:
-    build: ./services/notification-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: notification-service
     container_name: pvp-notification-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8086:8086"
     restart: unless-stopped
 
   reseller-service:
-    build: ./services/reseller-service
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: reseller-service
     container_name: pvp-reseller-service
     networks: [pvp-net]
     depends_on:
       postgres: { condition: service_healthy }
       nats:     { condition: service_healthy }
-      migrate:  { condition: service_completed_successfully }
     env_file: .env
     ports:
       - "8084:8084"
@@ -180,7 +189,9 @@ services:
 
   # ─── Frontend ─────────────────────────────────────────────────────
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: pvp-frontend
     networks: [pvp-net]
     depends_on:

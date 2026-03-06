@@ -1,0 +1,21 @@
+FROM golang:1.22-alpine AS builder
+WORKDIR /app
+
+# Copy everything needed for go.work to resolve all modules
+COPY go.work go.work.sum* ./
+COPY pkg/ pkg/
+COPY infrastructure/ infrastructure/
+COPY services/ services/
+
+# Build the specified service
+ARG SERVICE
+WORKDIR /app/services/${SERVICE}
+RUN go build -ldflags="-s -w" -o /bin/service ./cmd/server/
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=builder /bin/service /bin/app
+ARG PORT=8080
+EXPOSE ${PORT}
+USER nobody
+ENTRYPOINT ["/bin/app"]

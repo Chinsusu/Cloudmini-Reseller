@@ -32,14 +32,26 @@ func main() {
 
 	r := chi.NewRouter()
 
-	// ─── Middleware chain (follows doc 03-API-GATEWAY.md) ─────────────────────
+	// ─── Middleware — MUST be defined before routes ────────────────────────────
 	r.Use(mw.Recovery(log))
 	r.Use(mw.RequestID)
 	r.Use(mw.CORS)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Compress(5))
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			next.ServeHTTP(w, r)
+			log.InfoContext(r.Context(), "request",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.Duration("duration", time.Since(start)),
+				slog.String("request_id", mw.GetRequestID(r.Context())),
+			)
+		})
+	})
 
-	// Health
+	// ─── Routes ───────────────────────────────────────────────────────────────
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok","service":"api-gateway"}`))
@@ -72,20 +84,6 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireRole("admin", "super_admin"))
 			r.Mount("/api/v1/admin", adminRouter(cfg))
-		})
-	})
-
-	// Access log for all routes
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-			next.ServeHTTP(w, r)
-			log.InfoContext(r.Context(), "request",
-				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
-				slog.Duration("duration", time.Since(start)),
-				slog.String("request_id", mw.GetRequestID(r.Context())),
-			)
 		})
 	})
 
