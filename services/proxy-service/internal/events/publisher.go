@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/proxy-service/internal/domain"
 )
@@ -47,7 +48,7 @@ func (p *Publisher) PublishOrderCancelled(ctx context.Context, order *domain.Ord
 	return nil
 }
 
-func (p *Publisher) PublishOrderFailed(ctx context.Context, orderID interface{}, reason string) error {
+func (p *Publisher) PublishOrderFailed(ctx context.Context, orderID uuid.UUID, reason string) error {
 	if err := p.pub.Publish(ctx, TopicOrderFailed, map[string]any{
 		"order_id": orderID, "reason": reason,
 	}); err != nil {

@@ -305,7 +305,7 @@ func (u *ProvisionUsecase) waitForIP(ctx context.Context, nodeName string, vmid 
 			if t.After(deadline) {
 				return "", domain.ErrProvisionTimeout
 			}
-			ip, err := u.proxmox.GetConsoleURL(ctx, nodeName, vmid)
+			ip, err := u.proxmox.GetVMIPAddress(ctx, nodeName, vmid)
 			if err == nil && ip != "" {
 				return ip, nil
 			}

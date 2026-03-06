@@ -16,10 +16,9 @@ import (
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/proxy-service/internal/events"
 	httphandler "github.com/pvp/proxy-service/internal/handler/http"
+	"github.com/pvp/proxy-service/internal/providers"
 	repopg "github.com/pvp/proxy-service/internal/repository/postgres"
 	"github.com/pvp/proxy-service/internal/usecase"
-	"github.com/pvp/providers"
-	"github.com/pvp/providers/sandbox"
 )
 
 func main() {
@@ -56,7 +55,7 @@ func main() {
 
 	// Provider registry — register sandbox provider
 	registry := providers.NewRegistry()
-	registry.Register("sandbox-provider-uuid", sandbox.New())
+	registry.Register("sandbox-provider-uuid", providers.NewSandboxAdapter())
 
 	// Repos
 	orderRepo   := repopg.NewOrderRepository(db)

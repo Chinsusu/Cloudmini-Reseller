@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jmoiron/sqlx"
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/apierror"
 	"github.com/pvp/pkg/logger"
@@ -125,7 +126,7 @@ var notificationTriggers = map[string]struct {
 	"vm.provision.failed":   {"VPS Provisioning Failed", "vps_failed", "both"},
 }
 
-func runNotificationConsumer(ctx context.Context, client *natspkg.Client, db interface{ ExecContext(context.Context, string, ...any) (interface{}, error) }, mailer *Mailer, log *slog.Logger) {
+func runNotificationConsumer(ctx context.Context, client *natspkg.Client, db *sqlx.DB, mailer *Mailer, log *slog.Logger) {
 	subjects := make([]string, 0, len(notificationTriggers))
 	for subj := range notificationTriggers {
 		subjects = append(subjects, subj)

@@ -242,6 +242,10 @@ func (a *poolAdapter) ListSnapshots(ctx context.Context, n string, v int) ([]map
 func (a *poolAdapter) DeleteSnapshot(ctx context.Context, n string, v int, name string) (string, error) {
 	return a.pool.DeleteSnapshot(ctx, n, v, name)
 }
+func (a *poolAdapter) GetVMIPAddress(ctx context.Context, nodeName string, vmid int) (string, error) {
+	// Delegates to pool's GetVMIPAddress which polls the Proxmox guest agent
+	return a.pool.GetVMIPAddress(ctx, nodeName, vmid)
+}
 
 // ─── Stub billing adapter ─────────────────────────────────────────────────────
 

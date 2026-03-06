@@ -136,13 +136,9 @@ func (h *Handler) StripeWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) AdminListWallets(w http.ResponseWriter, r *http.Request) {
 	p := pagination.Parse(r)
-	wallets, total, err := h.walletUC.GetBalance(r.Context(), uuid.Nil) // placeholder
-	_ = total
-	if err != nil {
-		h.handleError(w, r, err)
-		return
-	}
-	apierror.RespondJSON(w, http.StatusOK, wallets)
+	_ = p // pagination used when a proper ListWallets usecase is added
+	// Admin wallet listing — placeholder response until ListWallets usecase is implemented
+	apierror.RespondJSON(w, http.StatusOK, []any{})
 }
 
 func (h *Handler) AdminAdjustBalance(w http.ResponseWriter, r *http.Request) {

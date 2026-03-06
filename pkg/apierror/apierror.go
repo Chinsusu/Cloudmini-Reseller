@@ -8,16 +8,17 @@ import (
 
 // Standard error codes (uppercase snake_case).
 const (
-	CodeValidationError     = "VALIDATION_ERROR"
-	CodeUnauthorized        = "UNAUTHORIZED"
-	CodeForbidden           = "FORBIDDEN"
-	CodeNotFound            = "NOT_FOUND"
-	CodeConflict            = "CONFLICT"
-	CodeInsufficientFunds   = "INSUFFICIENT_FUNDS"
+	CodeValidationError    = "VALIDATION_ERROR"
+	CodeUnauthorized       = "UNAUTHORIZED"
+	CodeForbidden          = "FORBIDDEN"
+	CodeNotFound           = "NOT_FOUND"
+	CodeConflict           = "CONFLICT"
+	CodeInsufficientFunds  = "INSUFFICIENT_FUNDS"
 	CodeProviderUnavailable = "PROVIDER_UNAVAILABLE"
-	CodeNodeUnavailable     = "NODE_UNAVAILABLE"
-	CodeRateLimitExceeded   = "RATE_LIMIT_EXCEEDED"
-	CodeInternalError       = "INTERNAL_ERROR"
+	CodeNodeUnavailable    = "NODE_UNAVAILABLE"
+	CodeServiceUnavailable = "SERVICE_UNAVAILABLE"
+	CodeRateLimitExceeded  = "RATE_LIMIT_EXCEEDED"
+	CodeInternalError      = "INTERNAL_ERROR"
 )
 
 // APIError is the standard error response body.

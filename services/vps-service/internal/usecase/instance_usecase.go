@@ -313,7 +313,7 @@ func (c *BillingCron) RunHourlyMeter(ctx context.Context) error {
 // HandleWalletEmpty suspends all running VPS instances for a user.
 // Triggered by billing.wallet.empty NATS event.
 func (c *BillingCron) HandleWalletEmpty(ctx context.Context, userID uuid.UUID) error {
-	instances, err := c.instanceRepo.ListByUser(ctx, userID, 0, 100)
+	instances, _, err := c.instanceRepo.ListByUser(ctx, userID, 0, 100)
 	if err != nil {
 		return fmt.Errorf("HandleWalletEmpty: list: %w", err)
 	}
