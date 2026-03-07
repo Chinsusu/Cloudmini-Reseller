@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import Cookies from 'js-cookie'
 import { authAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { Loader2 } from 'lucide-react'
@@ -26,22 +27,32 @@ export default function LoginPage() {
         setError('')
         try {
             const res = await authAPI.login(data.email, data.password)
-            const { user, access_token, refresh_token } = res.data.data
+            const { access_token, refresh_token, role, user_id } = res.data.data
+            // Store tokens first so /me call can use them
+            Cookies.set('pvp_token', access_token, { sameSite: 'strict' })
+            Cookies.set('pvp_refresh', refresh_token, { sameSite: 'strict' })
+            // Fetch user profile
+            let email = data.email
+            let fullName = ''
+            try {
+                const meRes = await authAPI.me()
+                email = meRes.data.data?.email || email
+                fullName = meRes.data.data?.full_name || ''
+            } catch { }
             setUser(
-                { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+                { id: user_id, email, fullName, role },
                 access_token,
                 refresh_token,
             )
-            // Redirect based on role
-            if (user.role === 'admin' || user.role === 'super_admin') {
+            if (role === 'admin' || role === 'super_admin') {
                 router.push('/admin')
-            } else if (user.role === 'reseller') {
+            } else if (role === 'reseller') {
                 router.push('/reseller')
             } else {
                 router.push('/dashboard')
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Login failed')
+            setError(err.response?.data?.error?.message || err.response?.data?.message || 'Login failed')
         }
     }
 
