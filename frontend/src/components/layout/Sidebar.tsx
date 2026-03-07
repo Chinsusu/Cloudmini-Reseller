@@ -127,21 +127,34 @@ export function Sidebar() {
                 </div>
             ))}
 
-            {/* User + Logout at bottom */}
+            {/* User + Logout at bottom — single row */}
             <div className="sidebar-bottom">
                 {user && (
-                    <div className="sidebar-user" style={{ marginBottom: '.5rem' }}>
-                        <div className="user-avatar">{initials}</div>
-                        <div>
-                            <p className="user-name">{user.fullName || user.email}</p>
-                            <span className="user-role">{user.role}</span>
+                    <div className="sidebar-user" style={{ justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                            <div className="user-avatar">{initials}</div>
+                            <div>
+                                <p className="user-name">{user.fullName || user.email}</p>
+                                <span className="user-role">{user.role}</span>
+                            </div>
                         </div>
+                        <button
+                            onClick={handleLogout}
+                            title="Log out"
+                            style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'var(--text-muted)', padding: '.35rem',
+                                borderRadius: 'var(--radius)', display: 'flex',
+                                alignItems: 'center', transition: 'color .15s',
+                                flexShrink: 0
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.color = 'var(--error)')}
+                            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                        >
+                            <LogOut size={17} />
+                        </button>
                     </div>
                 )}
-                <button onClick={handleLogout} className="sidebar-logout">
-                    <LogOut size={17} />
-                    <span>Log Out</span>
-                </button>
             </div>
         </aside>
     )
