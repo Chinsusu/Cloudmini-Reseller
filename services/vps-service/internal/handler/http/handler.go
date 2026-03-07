@@ -13,6 +13,7 @@ import (
 	"github.com/pvp/pkg/pagination"
 	"github.com/pvp/vps-service/internal/domain"
 	"github.com/pvp/vps-service/internal/usecase"
+	"github.com/shopspring/decimal"
 )
 
 // Handler holds vps-service usecase dependencies.
@@ -40,6 +41,67 @@ func (h *Handler) ListPlans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apierror.RespondJSON(w, http.StatusOK, plans)
+}
+
+// ─── Admin Plan Handlers ──────────────────────────────────────────────────────
+
+// GET /api/v1/admin/vps/plans
+func (h *Handler) AdminListPlans(w http.ResponseWriter, r *http.Request) {
+	var plans interface{}
+	var err error
+	plans, err = h.planRepo.List(r.Context())
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminListPlans error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, plans)
+}
+
+// POST /api/v1/admin/vps/plans
+func (h *Handler) AdminCreatePlan(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		Slug        string `json:"slug"`
+		CPUCores    int    `json:"cpu_cores"`
+		RAMMB       int    `json:"ram_mb"`
+		DiskGB      int    `json:"disk_gb"`
+		HourlyRate  string `json:"hourly_rate"`
+		MonthlyRate string `json:"monthly_rate"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	hourly, _ := decimal.NewFromString(req.HourlyRate)
+	monthly, _ := decimal.NewFromString(req.MonthlyRate)
+	plan := &domain.Plan{
+		ID:          uuid.New(),
+		Name:        req.Name,
+		Slug:        req.Slug,
+		CPU:         req.CPUCores,
+		RAMMB:       req.RAMMB,
+		DiskGB:      req.DiskGB,
+		HourlyRate:  hourly,
+		MonthlyRate: monthly,
+		IsActive:    true,
+	}
+	if err := h.planRepo.Create(r.Context(), plan); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminCreatePlan error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSON(w, http.StatusCreated, plan)
+}
+
+// PUT /api/v1/admin/vps/plans/{id}/toggle
+func (h *Handler) AdminTogglePlan(w http.ResponseWriter, r *http.Request) {
+	planID := mustParseUUID(chi.URLParam(r, "id"))
+	if err := h.planRepo.ToggleActive(r.Context(), planID); err != nil {
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // POST /api/v1/vps/orders — returns 202 Accepted
@@ -195,9 +257,10 @@ func (h *Handler) DeleteSnapshot(w http.ResponseWriter, r *http.Request) {
 }
 
 // NewRouter builds the chi router for vps-service.
-func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
+func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.CORS, middleware.Recovery(h.logger))
+	r.Use(middleware.AuditLog(auditLogger))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		apierror.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "vps-service"})
@@ -221,6 +284,16 @@ func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
 				r.Post("/{id}/snapshots", h.CreateSnapshot)
 				r.Get("/{id}/snapshots", h.ListSnapshots)
 				r.Delete("/{id}/snapshots/{snap_id}", h.DeleteSnapshot)
+			})
+		})
+
+		// Admin endpoints
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole("admin", "super_admin"))
+			r.Route("/api/v1/admin/vps", func(r chi.Router) {
+				r.Get("/plans", h.AdminListPlans)
+				r.Post("/plans", h.AdminCreatePlan)
+				r.Put("/plans/{id}/toggle", h.AdminTogglePlan)
 			})
 		})
 	})

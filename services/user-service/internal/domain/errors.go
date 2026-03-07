@@ -18,4 +18,5 @@ var (
 	ErrAPIKeyRevoked       = errors.New("api key has been revoked")
 	ErrForbidden           = errors.New("insufficient permissions")
 	ErrWeakPassword        = errors.New("password does not meet complexity requirements")
+	ErrInvalidTOTPCode     = errors.New("invalid or expired 2FA code")
 )

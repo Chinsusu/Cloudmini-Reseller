@@ -13,16 +13,35 @@ import (
 	"github.com/pvp/pkg/pagination"
 	"github.com/pvp/proxy-service/internal/domain"
 	"github.com/pvp/proxy-service/internal/usecase"
+	"github.com/shopspring/decimal"
 )
 
 // Handler holds proxy usecase dependencies.
 type Handler struct {
-	orderUC *usecase.OrderUsecase
-	logger  *slog.Logger
+	orderUC     *usecase.OrderUsecase
+	productRepo domain.IProductRepository
+	logger      *slog.Logger
 }
 
-func NewHandler(orderUC *usecase.OrderUsecase, logger *slog.Logger) *Handler {
-	return &Handler{orderUC: orderUC, logger: logger}
+func NewHandler(orderUC *usecase.OrderUsecase, productRepo domain.IProductRepository, logger *slog.Logger) *Handler {
+	return &Handler{orderUC: orderUC, productRepo: productRepo, logger: logger}
+}
+
+// ─── Public / User Routes ──────────────────────────────────────────────────
+
+// GET /api/v1/proxy/products
+func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) {
+	proxyType := r.URL.Query().Get("proxy_type")
+	protocol := r.URL.Query().Get("protocol")
+	location := r.URL.Query().Get("location")
+	p := pagination.Parse(r)
+	products, total, err := h.productRepo.List(r.Context(), proxyType, protocol, location, p.Offset, p.Limit)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "ListProducts error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSONWithMeta(w, http.StatusOK, products, pagination.NewMeta(p, total))
 }
 
 // CreateOrder handles POST /api/v1/proxy/orders
@@ -107,10 +126,80 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ─── Admin Routes ─────────────────────────────────────────────────────────────
+
+// GET /api/v1/admin/proxy/products
+func (h *Handler) AdminListProducts(w http.ResponseWriter, r *http.Request) {
+	p := pagination.Parse(r)
+	products, total, err := h.productRepo.List(r.Context(), "", "", "", p.Offset, p.Limit)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminListProducts error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSONWithMeta(w, http.StatusOK, products, pagination.NewMeta(p, total))
+}
+
+// POST /api/v1/admin/proxy/products
+func (h *Handler) AdminCreateProduct(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProviderID   string  `json:"provider_id"`
+		Name         string  `json:"name"`
+		ProxyType    string  `json:"proxy_type"`
+		Protocol     string  `json:"protocol"`
+		Location     string  `json:"location"`
+		DurationDays *int    `json:"duration_days"`
+		BandwidthGB  *string `json:"bandwidth_gb"`
+		BaseCost     string  `json:"base_cost"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	baseCost, _ := decimal.NewFromString(req.BaseCost)
+	providerID, _ := uuid.Parse(req.ProviderID)
+
+	product := &domain.Product{
+		ID:           uuid.New(),
+		ProviderID:   providerID,
+		Name:         req.Name,
+		ProxyType:    req.ProxyType,
+		Protocol:     req.Protocol,
+		Location:     req.Location,
+		DurationDays: req.DurationDays,
+		BaseCost:     baseCost,
+		IsActive:     true,
+	}
+	if req.BandwidthGB != nil {
+		v, _ := decimal.NewFromString(*req.BandwidthGB)
+		product.BandwidthGB = &v
+	}
+
+	if err := h.productRepo.Create(r.Context(), product); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminCreateProduct error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSON(w, http.StatusCreated, product)
+}
+
+// PUT /api/v1/admin/proxy/products/{id}/toggle
+func (h *Handler) AdminToggleProduct(w http.ResponseWriter, r *http.Request) {
+	productID := mustParseUUID(chi.URLParam(r, "id"))
+	if err := h.productRepo.ToggleActive(r.Context(), productID); err != nil {
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ─── Router ───────────────────────────────────────────────────────────────────
+
 // NewRouter builds the chi router for proxy-service.
-func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
+func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.CORS, middleware.Recovery(h.logger))
+	r.Use(middleware.AuditLog(auditLogger))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		apierror.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "proxy-service"})
@@ -120,11 +209,22 @@ func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
 		r.Use(middleware.Auth(jwtSecret))
 
 		r.Route("/api/v1/proxy", func(r chi.Router) {
+			r.Get("/products", h.ListProducts)
 			r.Get("/orders", h.ListOrders)
 			r.Post("/orders", h.CreateOrder)
 			r.Get("/orders/{id}", h.GetOrder)
 			r.Delete("/orders/{id}", h.CancelOrder)
 			r.Get("/orders/{id}/credentials", h.GetCredentials)
+		})
+
+		// Admin endpoints
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole("admin", "super_admin"))
+			r.Route("/api/v1/admin/proxy", func(r chi.Router) {
+				r.Get("/products", h.AdminListProducts)
+				r.Post("/products", h.AdminCreateProduct)
+				r.Put("/products/{id}/toggle", h.AdminToggleProduct)
+			})
 		})
 	})
 	return r

@@ -9,7 +9,7 @@ import (
 )
 
 // NewRouter builds and returns the chi router for user-service.
-func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
+func NewRouter(h *Handler, jwtSecret []byte, auditLogger mw.AuditLogger) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -18,6 +18,7 @@ func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
 	r.Use(mw.Recovery(h.logger))
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Compress(5))
+	r.Use(mw.AuditLog(auditLogger))
 
 	// Health check (no auth)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +47,10 @@ func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
 			r.Get("/me/api-keys", h.ListAPIKeys)
 			r.Post("/me/api-keys", h.CreateAPIKey)
 			r.Delete("/me/api-keys/{id}", h.RevokeAPIKey)
+			// 2FA
+			r.Post("/me/2fa/setup", h.Setup2FA)
+			r.Post("/me/2fa/enable", h.Enable2FA)
+			r.Delete("/me/2fa", h.Disable2FA)
 		})
 
 		// Admin routes
@@ -55,6 +60,9 @@ func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
 			r.Get("/{id}", h.AdminGetUser)
 			r.Put("/{id}/status", h.AdminUpdateStatus)
 			r.Put("/{id}/role", h.AdminUpdateRole)
+			r.Put("/{id}/profile", h.AdminUpdateProfile)
+			r.Delete("/{id}", h.AdminDeleteUser)
+			r.Put("/{id}/2fa/disable", h.AdminDisable2FA)
 		})
 	})
 

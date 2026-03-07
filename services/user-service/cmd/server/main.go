@@ -12,6 +12,7 @@ import (
 
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/logger"
+	mw "github.com/pvp/pkg/middleware"
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/user-service/internal/config"
 	"github.com/pvp/user-service/internal/events"
@@ -64,12 +65,15 @@ func main() {
 		cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.JWTAdminRefreshTTL,
 		cfg.MaxSessionsPerUser, cfg.MaxLoginAttempts,
 	)
-	userUC   := usecase.NewUserUsecase(accountRepo, log)
+	userUC   := usecase.NewUserUsecase(accountRepo, eventPub, log)
 	apiKeyUC := usecase.NewAPIKeyUsecase(apiKeyRepo, log)
+
+	// Audit logger
+	auditLogger := mw.NewNATSAuditLogger(natsPub, "user-service")
 
 	// Handler + Router
 	handler := httphandler.NewHandler(authUC, userUC, apiKeyUC, log)
-	router  := httphandler.NewRouter(handler, cfg.JWTSecret)
+	router  := httphandler.NewRouter(handler, cfg.JWTSecret, auditLogger)
 
 	// ─── HTTP Server ──────────────────────────────────────────────────────────
 	srv := &http.Server{

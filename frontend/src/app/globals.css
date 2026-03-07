@@ -806,7 +806,8 @@ html, body {
   animation: fadeIn .15s ease;
   padding: 1rem;
 }
-.modal-card {
+.modal-card,
+.modal {
   background: var(--surface);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
@@ -820,7 +821,30 @@ html, body {
   to   { opacity: 1; transform: scale(1);   }
 }
 .modal-header {
-  padding: 1.25rem 1.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.modal-close {
+  display: grid;
+  place-items: center;
+  padding: .3rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  transition: background .15s, color .15s;
+  flex-shrink: 0;
+}
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--text);
 }
 .modal-title {
   font-size: 1rem;
@@ -828,7 +852,7 @@ html, body {
   color: var(--text-heading);
 }
 .modal-body {
-  padding: .875rem 1.5rem 1.25rem;
+  padding: 1.25rem 1.5rem;
   color: var(--text);
   font-size: .9rem;
   line-height: 1.6;

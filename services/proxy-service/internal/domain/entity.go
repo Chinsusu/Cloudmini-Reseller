@@ -84,6 +84,8 @@ type IProviderRepository interface {
 type IProductRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Product, error)
 	List(ctx context.Context, proxyType, protocol, location string, offset, limit int) ([]*Product, int, error)
+	Create(ctx context.Context, p *Product) error
+	ToggleActive(ctx context.Context, id uuid.UUID) error
 }
 
 // IOrderRepository manages proxy orders.

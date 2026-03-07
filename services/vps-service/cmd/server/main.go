@@ -15,6 +15,7 @@ import (
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/crypto"
 	"github.com/pvp/pkg/logger"
+	mw "github.com/pvp/pkg/middleware"
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/vps-service/internal/config"
 	"github.com/pvp/vps-service/internal/events"
@@ -101,9 +102,10 @@ func main() {
 	go startWalletEmptyConsumer(ctx, natsClient, billingCron, log)
 
 	// HTTP
-	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
-	handler   := httphandler.NewHandler(provisionUC, instanceUC, planRepo, log)
-	router    := httphandler.NewRouter(handler, jwtSecret)
+	jwtSecret   := []byte(os.Getenv("JWT_SECRET"))
+	auditLogger := mw.NewNATSAuditLogger(natsPub, "vps-service")
+	handler     := httphandler.NewHandler(provisionUC, instanceUC, planRepo, log)
+	router      := httphandler.NewRouter(handler, jwtSecret, auditLogger)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: router, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
 
@@ -127,12 +129,9 @@ func main() {
 
 // startProvisionWorker subscribes to vm.provision.requested and calls RunProvisionWorker.
 func startProvisionWorker(ctx context.Context, client *natspkg.Client, provUC *usecase.ProvisionUsecase, log *slog.Logger) {
-	if err := client.CreateOrUpdateStream(ctx, "VPS_PROVISION", []string{"vm.provision.requested"}); err != nil {
-		log.Error("provision worker: create stream", slog.String("error", err.Error()))
-		return
-	}
+	// Use the shared PVP_EVENTS stream (managed by log-service)
 	consumer, err := client.CreateOrUpdateConsumer(ctx, natspkg.ConsumerConfig{
-		Stream:       "VPS_PROVISION",
+		Stream:       "PVP_EVENTS",
 		ConsumerName: "vps-provision-worker",
 		Subjects:     []string{"vm.provision.requested"},
 		MaxDeliver:   3,
@@ -159,12 +158,9 @@ func startProvisionWorker(ctx context.Context, client *natspkg.Client, provUC *u
 
 // startWalletEmptyConsumer subscribes to billing.wallet.empty → suspends all user VPS.
 func startWalletEmptyConsumer(ctx context.Context, client *natspkg.Client, billingCron *usecase.BillingCron, log *slog.Logger) {
-	if err := client.CreateOrUpdateStream(ctx, "BILLING_EVENTS", []string{"billing.>"}); err != nil {
-		log.Error("wallet.empty consumer: create stream", slog.String("error", err.Error()))
-		return
-	}
+	// Use the shared PVP_EVENTS stream (managed by log-service)
 	consumer, err := client.CreateOrUpdateConsumer(ctx, natspkg.ConsumerConfig{
-		Stream:       "BILLING_EVENTS",
+		Stream:       "PVP_EVENTS",
 		ConsumerName: "vps-wallet-empty-consumer",
 		Subjects:     []string{"billing.wallet.empty"},
 		MaxDeliver:   5,

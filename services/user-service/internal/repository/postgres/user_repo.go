@@ -110,6 +110,16 @@ func (r *AccountRepository) SoftDelete(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
+func (r *AccountRepository) UpdateTOTP(ctx context.Context, id uuid.UUID, enabled bool, secret *string) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE users.accounts SET totp_enabled=$1, totp_secret=$2, updated_at=NOW() WHERE id=$3`,
+		enabled, secret, id)
+	if err != nil {
+		return fmt.Errorf("AccountRepository.UpdateTOTP: %w", err)
+	}
+	return nil
+}
+
 func (r *AccountRepository) List(ctx context.Context, offset, limit int) ([]*domain.Account, int, error) {
 	var total int
 	if err := r.db.GetContext(ctx, &total,
@@ -184,6 +194,23 @@ func (r *SessionRepository) RevokeAllByUser(ctx context.Context, userID uuid.UUI
 	query := `UPDATE users.sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`
 	if _, err := r.db.ExecContext(ctx, query, userID); err != nil {
 		return fmt.Errorf("SessionRepository.RevokeAllByUser: %w", err)
+	}
+	return nil
+}
+
+// RevokeOldestByUser revokes only the single oldest active session for the user.
+// Used when MaxSessions is reached to evict the least-recently-created session.
+func (r *SessionRepository) RevokeOldestByUser(ctx context.Context, userID uuid.UUID) error {
+	query := `
+		UPDATE users.sessions SET revoked_at = NOW()
+		WHERE id = (
+			SELECT id FROM users.sessions
+			WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
+			ORDER BY created_at ASC
+			LIMIT 1
+		)`
+	if _, err := r.db.ExecContext(ctx, query, userID); err != nil {
+		return fmt.Errorf("SessionRepository.RevokeOldestByUser: %w", err)
 	}
 	return nil
 }

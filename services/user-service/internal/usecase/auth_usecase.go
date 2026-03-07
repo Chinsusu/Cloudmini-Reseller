@@ -173,15 +173,16 @@ func (u *AuthUsecase) Login(ctx context.Context, req LoginRequest) (*LoginResult
 		return nil, domain.ErrInvalidCredentials
 	}
 
-	// Check max sessions
+	// Check max sessions — evict only the oldest if limit reached
 	count, err := u.sessionRepo.CountActiveByUser(ctx, acc.ID)
 	if err != nil {
 		return nil, fmt.Errorf("AuthUsecase.Login: count sessions: %w", err)
 	}
 	if count >= u.maxSessions {
-		// Evict oldest by revoking all and creating fresh — simplest policy
-		if err := u.sessionRepo.RevokeAllByUser(ctx, acc.ID); err != nil {
-			return nil, fmt.Errorf("AuthUsecase.Login: evict sessions: %w", err)
+		// Evict the single oldest session to make room for the new one.
+		// Do NOT revoke all — that would kill other active browser sessions.
+		if err := u.sessionRepo.RevokeOldestByUser(ctx, acc.ID); err != nil {
+			return nil, fmt.Errorf("AuthUsecase.Login: evict oldest session: %w", err)
 		}
 	}
 

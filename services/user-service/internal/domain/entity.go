@@ -29,19 +29,21 @@ const (
 
 // Account represents a platform user account.
 type Account struct {
-	ID            uuid.UUID  `db:"id"`
-	Email         string     `db:"email"`
-	PasswordHash  string     `db:"password_hash"`
-	FullName      string     `db:"full_name"`
-	Phone         string     `db:"phone"`
-	Role          string     `db:"role"`
-	Status        string     `db:"status"`
-	ResellerID    *uuid.UUID `db:"reseller_id"`
-	EmailVerified bool       `db:"email_verified"`
-	LastLoginAt   *time.Time `db:"last_login_at"`
-	CreatedAt     time.Time  `db:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at"`
-	DeletedAt     *time.Time `db:"deleted_at"`
+	ID            uuid.UUID  `db:"id"            json:"id"`
+	Email         string     `db:"email"          json:"email"`
+	PasswordHash  string     `db:"password_hash"  json:"-"`
+	FullName      string     `db:"full_name"      json:"full_name"`
+	Phone         string     `db:"phone"          json:"phone"`
+	Role          string     `db:"role"           json:"role"`
+	Status        string     `db:"status"         json:"status"`
+	ResellerID    *uuid.UUID `db:"reseller_id"    json:"reseller_id,omitempty"`
+	EmailVerified bool       `db:"email_verified" json:"email_verified"`
+	TotpEnabled   bool       `db:"totp_enabled"   json:"totp_enabled"`
+	TotpSecret    *string    `db:"totp_secret"    json:"-"`
+	LastLoginAt   *time.Time `db:"last_login_at"  json:"last_login_at,omitempty"`
+	CreatedAt     time.Time  `db:"created_at"     json:"created_at"`
+	UpdatedAt     time.Time  `db:"updated_at"     json:"updated_at"`
+	DeletedAt     *time.Time `db:"deleted_at"     json:"deleted_at,omitempty"`
 }
 
 // Session represents a refresh token session.
@@ -81,6 +83,7 @@ type IAccountRepository interface {
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateRole(ctx context.Context, id uuid.UUID, role string) error
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
+	UpdateTOTP(ctx context.Context, id uuid.UUID, enabled bool, secret *string) error
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, offset, limit int) ([]*Account, int, error)
 }
@@ -92,6 +95,7 @@ type ISessionRepository interface {
 	CountActiveByUser(ctx context.Context, userID uuid.UUID) (int, error)
 	RevokeByToken(ctx context.Context, hashedToken string) error
 	RevokeAllByUser(ctx context.Context, userID uuid.UUID) error
+	RevokeOldestByUser(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) (int64, error)
 }
 
@@ -111,4 +115,9 @@ type IEventPublisher interface {
 	PublishUserLogin(ctx context.Context, userID uuid.UUID, ip string) error
 	PublishPasswordChanged(ctx context.Context, userID uuid.UUID) error
 	PublishUserSuspended(ctx context.Context, userID uuid.UUID, reason string) error
+	// Audit events
+	PublishUser2FAEnabled(ctx context.Context, userID uuid.UUID) error
+	PublishUser2FADisabled(ctx context.Context, userID uuid.UUID) error
+	PublishUser2FAAdminDisabled(ctx context.Context, userID, actorID uuid.UUID) error
+	PublishUserAdminUpdated(ctx context.Context, userID, actorID uuid.UUID, changes map[string]any) error
 }

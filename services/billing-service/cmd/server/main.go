@@ -12,6 +12,7 @@ import (
 
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/logger"
+	mw "github.com/pvp/pkg/middleware"
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/billing-service/internal/config"
 	"github.com/pvp/billing-service/internal/events"
@@ -59,9 +60,10 @@ func main() {
 	paymentUC  := usecase.NewPaymentUsecase(paymentRepo, walletUC, log, cfg.StripeSecretKey, cfg.FrontendBaseURL)
 
 	// HTTP
-	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
-	handler   := httphandler.NewHandler(walletUC, paymentUC, pricingEng, log)
-	router    := httphandler.NewRouter(handler, jwtSecret)
+	jwtSecret   := []byte(os.Getenv("JWT_SECRET"))
+	auditLogger := mw.NewNATSAuditLogger(natsPub, "billing-service")
+	handler     := httphandler.NewHandler(walletUC, paymentUC, pricingEng, log)
+	router      := httphandler.NewRouter(handler, jwtSecret, auditLogger)
 
 	srv := &http.Server{Addr: ":" + cfg.Port, Handler: router, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second}
 

@@ -13,6 +13,7 @@ import (
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/crypto"
 	"github.com/pvp/pkg/logger"
+	mw "github.com/pvp/pkg/middleware"
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/proxy-service/internal/events"
 	httphandler "github.com/pvp/proxy-service/internal/handler/http"
@@ -76,8 +77,9 @@ func main() {
 	)
 
 	// HTTP
-	handler := httphandler.NewHandler(orderUC, log)
-	router  := httphandler.NewRouter(handler, jwtSecret)
+	auditLogger := mw.NewNATSAuditLogger(natsPub, "proxy-service")
+	handler := httphandler.NewHandler(orderUC, productRepo, log)
+	router  := httphandler.NewRouter(handler, jwtSecret, auditLogger)
 
 	srv := &http.Server{Addr: ":" + port, Handler: router, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second}
 

@@ -308,6 +308,94 @@ func (h *Handler) AdminUpdateRole(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) AdminUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(chi.URLParam(r, "id"))
+	var req struct {
+		FullName string `json:"full_name"`
+		Phone    string `json:"phone"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "Invalid JSON body")
+		return
+	}
+	acc, err := h.userUC.UpdateProfile(r.Context(), userID, usecase.UpdateProfileRequest{
+		FullName: req.FullName,
+		Phone:    req.Phone,
+	})
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, toAccountResponse(acc))
+}
+
+func (h *Handler) AdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(chi.URLParam(r, "id"))
+	if err := h.userUC.SoftDelete(r.Context(), userID); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ─── 2FA / TOTP Handlers ──────────────────────────────────────────────────────
+
+// POST /api/v1/users/me/2fa/setup — generate secret + otpauth URL
+func (h *Handler) Setup2FA(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	result, err := h.userUC.SetupTOTP(r.Context(), userID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, result)
+}
+
+// POST /api/v1/users/me/2fa/enable — verify code and activate 2FA
+func (h *Handler) Enable2FA(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "code is required")
+		return
+	}
+	if err := h.userUC.EnableTOTP(r.Context(), userID, req.Code); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/users/me/2fa — verify code and disable 2FA
+func (h *Handler) Disable2FA(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "code is required")
+		return
+	}
+	if err := h.userUC.DisableTOTP(r.Context(), userID, req.Code); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/admin/users/{id}/2fa/disable — admin force-disable
+func (h *Handler) AdminDisable2FA(w http.ResponseWriter, r *http.Request) {
+	userID   := mustParseUUID(chi.URLParam(r, "id"))
+	actorID  := mustParseUUID(middleware.GetUserID(r.Context()))
+	if err := h.userUC.AdminDisableTOTP(r.Context(), userID, actorID); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error) {
@@ -315,6 +403,8 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, domain.ErrUserNotFound), errors.Is(err, domain.ErrAPIKeyNotFound), errors.Is(err, domain.ErrSessionNotFound):
 		apierror.Respond(w, r, http.StatusNotFound, apierror.CodeNotFound, err.Error())
 	case errors.Is(err, domain.ErrInvalidCredentials), errors.Is(err, domain.ErrTokenInvalid), errors.Is(err, domain.ErrTokenExpired):
+		apierror.Respond(w, r, http.StatusUnauthorized, apierror.CodeUnauthorized, err.Error())
+	case errors.Is(err, domain.ErrInvalidTOTPCode):
 		apierror.Respond(w, r, http.StatusUnauthorized, apierror.CodeUnauthorized, err.Error())
 	case errors.Is(err, domain.ErrAccountSuspended), errors.Is(err, domain.ErrEmailNotVerified):
 		apierror.Respond(w, r, http.StatusForbidden, apierror.CodeForbidden, err.Error())
@@ -345,6 +435,7 @@ type accountResponse struct {
 	Role          string  `json:"role"`
 	Status        string  `json:"status"`
 	EmailVerified bool    `json:"email_verified"`
+	TotpEnabled   bool    `json:"totp_enabled"`
 	ResellerID    *string `json:"reseller_id,omitempty"`
 }
 
@@ -357,6 +448,7 @@ func toAccountResponse(acc *domain.Account) accountResponse {
 		Role:          acc.Role,
 		Status:        acc.Status,
 		EmailVerified: acc.EmailVerified,
+		TotpEnabled:   acc.TotpEnabled,
 	}
 	if acc.ResellerID != nil {
 		s := acc.ResellerID.String()

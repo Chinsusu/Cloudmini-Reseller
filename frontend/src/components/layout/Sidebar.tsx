@@ -2,9 +2,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-    LayoutDashboard, Globe, Server, Wallet, Settings,
+    LayoutDashboard, Globe, Server, Wallet, User,
     Users, Key, Webhook, LogOut, ShieldCheck, BarChart3,
-    Cloud, ChevronRight
+    Cloud, ChevronRight, ClipboardList
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { authAPI } from '@/lib/api'
@@ -29,7 +29,7 @@ const userNav = [
         group: 'ACCOUNT',
         items: [
             { href: '/dashboard/wallet', label: 'Wallet', icon: Wallet },
-            { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+            { href: '/dashboard/profile', label: 'Profile', icon: User },
         ]
     },
 ]
@@ -46,6 +46,23 @@ const adminNav = [
         items: [
             { href: '/admin/users', label: 'Users', icon: Users },
             { href: '/admin/resellers', label: 'Resellers', icon: ShieldCheck },
+            { href: '/admin/proxy', label: 'Proxy Products', icon: Globe },
+            { href: '/admin/vps', label: 'VPS Plans', icon: Server },
+            { href: '/admin/logs', label: 'Audit Logs', icon: ClipboardList },
+        ]
+    },
+    {
+        group: 'SERVICES',
+        items: [
+            { href: '/dashboard/proxy', label: 'Proxy Orders', icon: Globe },
+            { href: '/dashboard/vps', label: 'VPS Instances', icon: Server },
+        ]
+    },
+    {
+        group: 'MY ACCOUNT',
+        items: [
+            { href: '/dashboard/wallet', label: 'Wallet', icon: Wallet },
+            { href: '/dashboard/profile', label: 'Profile', icon: User },
         ]
     },
 ]
@@ -110,7 +127,12 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
                     <p className="nav-group-label">{group}</p>
                     <nav className="sidebar-nav">
                         {items.map(({ href, label, icon: Icon }) => {
-                            const active = pathname === href || (href !== '/' && pathname?.startsWith(href + '/'))
+                            // Root dashboard links (e.g. /admin, /dashboard, /reseller) should only
+                            // be active on exact match — sub-routes like /admin/users must NOT
+                            // highlight the parent dashboard item.
+                            const isRootOnly = ['/admin', '/dashboard', '/reseller'].includes(href)
+                            const active = pathname === href ||
+                                (!isRootOnly && href !== '/' && pathname?.startsWith(href + '/'))
                             return (
                                 <Link
                                     key={href}

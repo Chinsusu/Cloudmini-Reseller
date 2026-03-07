@@ -44,6 +44,25 @@ func (r *PlanRepository) List(ctx context.Context) ([]*domain.Plan, error) {
 	return plans, nil
 }
 
+func (r *PlanRepository) Create(ctx context.Context, p *domain.Plan) error {
+	q := `INSERT INTO vps.plans
+		(id,name,slug,cpu_cores,ram_mb,disk_gb,bandwidth_gb,hourly_rate,monthly_rate,is_active,created_at)
+		VALUES (:id,:name,:slug,:cpu_cores,:ram_mb,:disk_gb,:bandwidth_gb,:hourly_rate,:monthly_rate,:is_active,NOW())`
+	if _, err := r.db.NamedExecContext(ctx, q, p); err != nil {
+		return fmt.Errorf("PlanRepository.Create: %w", err)
+	}
+	return nil
+}
+
+func (r *PlanRepository) ToggleActive(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE vps.plans SET is_active = NOT is_active WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("PlanRepository.ToggleActive: %w", err)
+	}
+	return nil
+}
+
 // ─── NodeRepository ───────────────────────────────────────────────────────────
 
 type NodeRepository struct{ db *sqlx.DB }

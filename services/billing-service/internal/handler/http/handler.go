@@ -177,9 +177,10 @@ func (h *Handler) AdminAdjustBalance(w http.ResponseWriter, r *http.Request) {
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 // NewRouter returns the chi router for billing-service.
-func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
+func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.CORS, middleware.Recovery(h.logger))
+	r.Use(middleware.AuditLog(auditLogger))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		apierror.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "billing-service"})

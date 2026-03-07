@@ -19,24 +19,25 @@ const (
 
 // ResellerAccount represents a platform reseller.
 type ResellerAccount struct {
-	ID            uuid.UUID  `db:"id"`
-	UserID        uuid.UUID  `db:"user_id"` // linked user account
-	CompanyName   string     `db:"company_name"`
-	Email         string     `db:"email"`
-	Phone         string     `db:"phone"`
-	Address       string     `db:"address"`
-	TaxID         string     `db:"tax_id"`
-	Status        string     `db:"status"` // pending|approved|suspended
-	APIKeyPrefix  string     `db:"api_key_prefix"`
-	WalletID      *uuid.UUID `db:"wallet_id"`
+	ID            uuid.UUID       `db:"id"`
+	UserID        uuid.UUID       `db:"user_id"` // linked user account
+	CompanyName   string          `db:"company_name"`
+	Slug          *string         `db:"slug"`           // for white-label subdomain (nullable)
+	Email         string          `db:"email"`
+	Phone         string          `db:"phone"`
+	Address       string          `db:"address"`
+	TaxID         string          `db:"tax_id"`
+	Status        string          `db:"status"` // pending|approved|suspended
+	APIKeyPrefix  string          `db:"api_key_prefix"`
+	WalletID      *uuid.UUID      `db:"wallet_id"`
 	CreditLimit   decimal.Decimal `db:"credit_limit"`
 	CommissionPct decimal.Decimal `db:"commission_pct"` // 0-100
-	Notes         string     `db:"notes"`
-	ApprovedAt    *time.Time `db:"approved_at"`
-	SuspendedAt   *time.Time `db:"suspended_at"`
-	SuspendReason string     `db:"suspend_reason"`
-	CreatedAt     time.Time  `db:"created_at"`
-	UpdatedAt     time.Time  `db:"updated_at"`
+	Notes         string          `db:"notes"`
+	ApprovedAt    *time.Time      `db:"approved_at"`
+	SuspendedAt   *time.Time      `db:"suspended_at"`
+	SuspendReason string          `db:"suspend_reason"`
+	CreatedAt     time.Time       `db:"created_at"`
+	UpdatedAt     time.Time       `db:"updated_at"`
 }
 
 // PricingOverride holds a reseller's custom sell price for a product.

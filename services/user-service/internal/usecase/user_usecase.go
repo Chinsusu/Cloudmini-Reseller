@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"github.com/pvp/user-service/internal/domain"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,12 +17,13 @@ import (
 // UserUsecase handles profile management.
 type UserUsecase struct {
 	accountRepo domain.IAccountRepository
+	eventPub    domain.IEventPublisher
 	logger      *slog.Logger
 }
 
 // NewUserUsecase constructs UserUsecase.
-func NewUserUsecase(accountRepo domain.IAccountRepository, logger *slog.Logger) *UserUsecase {
-	return &UserUsecase{accountRepo: accountRepo, logger: logger}
+func NewUserUsecase(accountRepo domain.IAccountRepository, eventPub domain.IEventPublisher, logger *slog.Logger) *UserUsecase {
+	return &UserUsecase{accountRepo: accountRepo, eventPub: eventPub, logger: logger}
 }
 
 // GetProfile returns a user's account details.
@@ -137,6 +139,89 @@ func (u *UserUsecase) ListUsers(ctx context.Context, offset, limit int) ([]*doma
 		return nil, 0, fmt.Errorf("UserUsecase.ListUsers: %w", err)
 	}
 	return users, total, nil
+}
+
+// SoftDelete marks a user account as deleted (admin).
+func (u *UserUsecase) SoftDelete(ctx context.Context, userID uuid.UUID) error {
+	if err := u.accountRepo.SoftDelete(ctx, userID); err != nil {
+		return fmt.Errorf("UserUsecase.SoftDelete: %w", err)
+	}
+	u.logger.InfoContext(ctx, "user soft-deleted", slog.String("user_id", userID.String()))
+	return nil
+}
+
+// SetupTOTPResult holds the secret and provisioning URI for QR code generation.
+type SetupTOTPResult struct {
+	Secret     string `json:"secret"`
+	OtpauthURL string `json:"otpauth_url"`
+}
+
+// SetupTOTP generates a new TOTP secret for the user (not enabled yet).
+func (u *UserUsecase) SetupTOTP(ctx context.Context, userID uuid.UUID) (*SetupTOTPResult, error) {
+	acc, err := u.accountRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("UserUsecase.SetupTOTP: %w", err)
+	}
+	key, err := totp.Generate(totp.GenerateOpts{
+		Issuer:      "Cloudmini",
+		AccountName: acc.Email,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("UserUsecase.SetupTOTP: generate: %w", err)
+	}
+	// Store secret (not enabled yet)
+	secret := key.Secret()
+	if err := u.accountRepo.UpdateTOTP(ctx, userID, false, &secret); err != nil {
+		return nil, fmt.Errorf("UserUsecase.SetupTOTP: save: %w", err)
+	}
+	return &SetupTOTPResult{Secret: secret, OtpauthURL: key.URL()}, nil
+}
+
+// EnableTOTP verifies the TOTP code and enables 2FA.
+func (u *UserUsecase) EnableTOTP(ctx context.Context, userID uuid.UUID, code string) error {
+	acc, err := u.accountRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("UserUsecase.EnableTOTP: %w", err)
+	}
+	if acc.TotpSecret == nil {
+		return fmt.Errorf("UserUsecase.EnableTOTP: 2FA not set up yet")
+	}
+	if !totp.Validate(code, *acc.TotpSecret) {
+		return domain.ErrInvalidTOTPCode
+	}
+	if err := u.accountRepo.UpdateTOTP(ctx, userID, true, acc.TotpSecret); err != nil {
+		return err
+	}
+	go func() { _ = u.eventPub.PublishUser2FAEnabled(context.Background(), userID) }()
+	return nil
+}
+
+// DisableTOTP verifies the TOTP code and disables 2FA.
+func (u *UserUsecase) DisableTOTP(ctx context.Context, userID uuid.UUID, code string) error {
+	acc, err := u.accountRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("UserUsecase.DisableTOTP: %w", err)
+	}
+	if !acc.TotpEnabled {
+		return nil // already disabled
+	}
+	if !totp.Validate(code, *acc.TotpSecret) {
+		return domain.ErrInvalidTOTPCode
+	}
+	if err := u.accountRepo.UpdateTOTP(ctx, userID, false, nil); err != nil {
+		return err
+	}
+	go func() { _ = u.eventPub.PublishUser2FADisabled(context.Background(), userID) }()
+	return nil
+}
+
+// AdminDisableTOTP force-disables 2FA for any user (no code needed).
+func (u *UserUsecase) AdminDisableTOTP(ctx context.Context, userID, actorID uuid.UUID) error {
+	if err := u.accountRepo.UpdateTOTP(ctx, userID, false, nil); err != nil {
+		return err
+	}
+	go func() { _ = u.eventPub.PublishUser2FAAdminDisabled(context.Background(), userID, actorID) }()
+	return nil
 }
 
 // ─── APIKeyUsecase ─────────────────────────────────────────────────────────── 

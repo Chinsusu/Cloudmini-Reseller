@@ -12,6 +12,7 @@ import (
 
 	natspkg "github.com/pvp/pkg/nats"
 	"github.com/pvp/pkg/logger"
+	mw "github.com/pvp/pkg/middleware"
 	pgpkg "github.com/pvp/pkg/postgres"
 	"github.com/pvp/reseller-service/internal/events"
 	httphandler "github.com/pvp/reseller-service/internal/handler/http"
@@ -59,8 +60,9 @@ func main() {
 	webhookUC  := usecase.NewWebhookUsecase(webhookRepo, log)
 
 	// HTTP
+	auditLogger := mw.NewNATSAuditLogger(natsPub, "reseller-service")
 	handler := httphandler.NewHandler(resellerUC, apiKeyUC, webhookUC, log)
-	router  := httphandler.NewRouter(handler, jwtSecret)
+	router  := httphandler.NewRouter(handler, jwtSecret, auditLogger)
 
 	srv := &http.Server{Addr: ":" + port, Handler: router, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second}
 

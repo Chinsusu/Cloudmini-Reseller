@@ -151,7 +151,8 @@ func (h *Handler) ResellerDashboard(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/reseller/users
 func (h *Handler) ListSubAccounts(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	p := pagination.Parse(r)
 	subs, total, err := h.resellerUC.ListSubAccounts(r.Context(), resellerID, p.Offset, p.Limit)
 	if err != nil {
@@ -163,7 +164,8 @@ func (h *Handler) ListSubAccounts(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/reseller/users
 func (h *Handler) CreateSubAccount(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	var req struct {
 		UserID      string `json:"user_id"`
 		CreditLimit string `json:"credit_limit"`
@@ -186,7 +188,8 @@ func (h *Handler) CreateSubAccount(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/v1/reseller/users/{user_id}/credit
 func (h *Handler) SetUserCredit(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	userID := mustParseUUID(chi.URLParam(r, "user_id"))
 	var req struct{ CreditLimit string `json:"credit_limit"` }
 	_ = json.NewDecoder(r.Body).Decode(&req)
@@ -200,7 +203,8 @@ func (h *Handler) SetUserCredit(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/reseller/pricing
 func (h *Handler) ListPricing(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	pricing, err := h.resellerUC.ListPricing(r.Context(), resellerID)
 	if err != nil {
 		h.handleError(w, r, err)
@@ -211,7 +215,8 @@ func (h *Handler) ListPricing(w http.ResponseWriter, r *http.Request) {
 
 // PUT /api/v1/reseller/pricing/{product_id}
 func (h *Handler) SetPricing(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	productID := mustParseUUID(chi.URLParam(r, "product_id"))
 	var req struct {
 		ProductType string `json:"product_type"`
@@ -242,7 +247,8 @@ func (h *Handler) SetPricing(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/reseller/api-keys
 func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	keys, err := h.apiKeyUC.ListAPIKeys(r.Context(), resellerID)
 	if err != nil {
 		h.handleError(w, r, err)
@@ -254,7 +260,8 @@ func (h *Handler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/reseller/api-keys
 func (h *Handler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	var req struct {
 		Name      string   `json:"name"`
 		Scopes    []string `json:"scopes"`
@@ -286,7 +293,8 @@ func (h *Handler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/reseller/api-keys/{id}
 func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	keyID := mustParseUUID(chi.URLParam(r, "id"))
 	if err := h.apiKeyUC.RevokeAPIKey(r.Context(), keyID, resellerID); err != nil {
 		h.handleError(w, r, err)
@@ -299,7 +307,8 @@ func (h *Handler) RevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/reseller/webhooks
 func (h *Handler) ListWebhooks(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	webhooks, err := h.webhookUC.ListWebhooks(r.Context(), resellerID)
 	if err != nil {
 		h.handleError(w, r, err)
@@ -310,7 +319,8 @@ func (h *Handler) ListWebhooks(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/reseller/webhooks
 func (h *Handler) CreateWebhook(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	var req struct {
 		URL    string   `json:"url"`
 		Secret string   `json:"secret"`
@@ -330,7 +340,8 @@ func (h *Handler) CreateWebhook(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/reseller/webhooks/{id}
 func (h *Handler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
-	resellerID := mustResellerID(r)
+	resellerID, ok := h.mustResellerID(w, r)
+	if !ok { return }
 	id := mustParseUUID(chi.URLParam(r, "id"))
 	if err := h.webhookUC.DeleteWebhook(r.Context(), id, resellerID); err != nil {
 		h.handleError(w, r, err)
@@ -342,9 +353,10 @@ func (h *Handler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 // NewRouter builds the chi router for reseller-service.
-func NewRouter(h *Handler, jwtSecret []byte) http.Handler {
+func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.CORS, middleware.Recovery(h.logger))
+	r.Use(middleware.AuditLog(auditLogger))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		apierror.RespondJSON(w, http.StatusOK, map[string]string{"status": "ok", "service": "reseller-service"})
@@ -418,11 +430,21 @@ func (h *Handler) handleError(w http.ResponseWriter, r *http.Request, err error)
 	}
 }
 
-// mustResellerID extracts reseller_id from JWT context (stored as reseller_id claim).
-// In production, middleware resolves this from the user's reseller account.
-func mustResellerID(r *http.Request) uuid.UUID {
-	id, _ := uuid.Parse(r.Header.Get("X-Reseller-ID"))
-	return id
+// mustResellerID resolves the reseller account for the authenticated user.
+// It looks up the reseller by user_id from the JWT context.
+func (h *Handler) mustResellerID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	userIDStr := middleware.GetUserID(r.Context())
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusUnauthorized, apierror.CodeUnauthorized, "invalid user identity")
+		return uuid.Nil, false
+	}
+	reseller, err := h.resellerUC.GetResellerByUserID(r.Context(), userID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return uuid.Nil, false
+	}
+	return reseller.ID, true
 }
 
 func mustParseUUID(s string) uuid.UUID { id, _ := uuid.Parse(s); return id }

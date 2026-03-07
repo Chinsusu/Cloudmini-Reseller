@@ -123,6 +123,25 @@ func (r *ProductRepository) List(ctx context.Context, proxyType, protocol, locat
 	return products, total, err
 }
 
+func (r *ProductRepository) Create(ctx context.Context, p *domain.Product) error {
+	q := `INSERT INTO proxy.products
+		(id,provider_id,name,proxy_type,protocol,location,duration_days,bandwidth_gb,base_cost,is_active,created_at)
+		VALUES (:id,:provider_id,:name,:proxy_type,:protocol,:location,:duration_days,:bandwidth_gb,:base_cost,:is_active,NOW())`
+	if _, err := r.db.NamedExecContext(ctx, q, p); err != nil {
+		return fmt.Errorf("ProductRepository.Create: %w", err)
+	}
+	return nil
+}
+
+func (r *ProductRepository) ToggleActive(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE proxy.products SET is_active = NOT is_active WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("ProductRepository.ToggleActive: %w", err)
+	}
+	return nil
+}
+
 // ─── ProviderRepository ────────────────────────────────────────────────────────
 
 type ProviderRepository struct{ db *sqlx.DB }

@@ -106,6 +106,8 @@ type Snapshot struct {
 type IPlanRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Plan, error)
 	List(ctx context.Context) ([]*Plan, error)
+	Create(ctx context.Context, p *Plan) error
+	ToggleActive(ctx context.Context, id uuid.UUID) error
 }
 
 // INodeRepository manages Proxmox nodes.

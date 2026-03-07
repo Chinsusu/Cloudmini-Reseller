@@ -189,17 +189,22 @@ func main() {
 		r.Get("/api/v1/logs", func(w http.ResponseWriter, r *http.Request) {
 			p := pagination.Parse(r)
 			userID := middleware.GetUserID(r.Context())
-			role := middleware.GetUserRole(r.Context())
+			role   := middleware.GetUserRole(r.Context())
+
+			filterUserID := r.URL.Query().Get("user_id")
+			filterAction := r.URL.Query().Get("action")
+			filterService := r.URL.Query().Get("service")
+
+			// Non-admins can only see their own logs
+			if role != "admin" && role != "super_admin" {
+				filterUserID = userID
+			}
 
 			var entries []*LogEntry
-			var total int
+			var total   int
 			var queryErr error
 
-			if role == "admin" || role == "super_admin" {
-				entries, total, queryErr = listAllLogs(r.Context(), db, p.Offset, p.Limit)
-			} else {
-				entries, total, queryErr = listUserLogs(r.Context(), db, userID, p.Offset, p.Limit)
-			}
+			entries, total, queryErr = listLogs(r.Context(), db, filterUserID, filterAction, filterService, p.Offset, p.Limit)
 			if queryErr != nil {
 				apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "failed to list logs")
 				return
@@ -231,9 +236,9 @@ func main() {
 // ─── NATS Consumer ────────────────────────────────────────────────────────────
 
 func runConsumer(ctx context.Context, client *natspkg.Client, db *sqlx.DB, hub *Hub, log *slog.Logger) {
-	// Ensure stream exists for all service subjects
+	// Ensure stream exists for all service subjects including sys.> (HTTP audit)
 	if err := client.CreateOrUpdateStream(ctx, "PVP_EVENTS", []string{
-		"user.>", "billing.>", "proxy.>", "vps.>", "vm.>",
+		"user.>", "billing.>", "proxy.>", "vps.>", "vm.>", "sys.>",
 	}); err != nil {
 		log.Error("create stream", slog.String("error", err.Error()))
 		return
@@ -242,7 +247,7 @@ func runConsumer(ctx context.Context, client *natspkg.Client, db *sqlx.DB, hub *
 	consumer, err := client.CreateOrUpdateConsumer(ctx, natspkg.ConsumerConfig{
 		Stream:       "PVP_EVENTS",
 		ConsumerName: "log-service-consumer",
-		Subjects:     []string{"user.>", "billing.>", "proxy.>", "vps.>", "vm.>"},
+		Subjects:     []string{"user.>", "billing.>", "proxy.>", "vps.>", "vm.>", "sys.>"},
 		MaxDeliver:   3,
 	})
 	if err != nil {
@@ -251,26 +256,14 @@ func runConsumer(ctx context.Context, client *natspkg.Client, db *sqlx.DB, hub *
 	}
 
 	handler := func(ctx context.Context, subject string, data []byte) error {
-		entry := &LogEntry{
-			ServiceName: serviceFromSubject(subject),
-			ActorType:   "system",
-			Action:      subject,
-			Level:       "INFO",
-			Message:     fmt.Sprintf("Event: %s", subject),
-			CreatedAt:   time.Now(),
-		}
-
-		// Try to extract user_id from payload
 		var payload map[string]any
-		if err := json.Unmarshal(data, &payload); err == nil {
-			if uid, ok := payload["user_id"].(string); ok {
-				entry.UserID = &uid
-			}
-		}
+		_ = json.Unmarshal(data, &payload)
+
+		entry := buildEntry(subject, payload)
 
 		if err := persistLog(ctx, db, entry); err != nil {
 			log.Warn("persist log failed", slog.String("subject", subject), slog.String("error", err.Error()))
-			return err // trigger Nak → retry
+			return err
 		}
 
 		hub.Broadcast(entry)
@@ -284,28 +277,141 @@ func runConsumer(ctx context.Context, client *natspkg.Client, db *sqlx.DB, hub *
 	}
 }
 
+// buildEntry creates a rich LogEntry from a NATS subject + payload.
+func buildEntry(subject string, payload map[string]any) *LogEntry {
+	str := func(key string) *string {
+		if v, ok := payload[key].(string); ok && v != "" {
+			s := v; return &s
+		}
+		return nil
+	}
+
+	// ── HTTP Request audit event ────────────────────────────────────────────
+	if subject == "sys.http_request" {
+		method  := strVal(payload, "method")
+		path    := strVal(payload, "path")
+		status  := int(numVal(payload, "status_code"))
+		durMS   := int(numVal(payload, "duration_ms"))
+		serv    := strVal(payload, "service_name")
+		userID  := str("user_id")
+		ip      := str("ip_address")
+		reqID   := str("request_id")
+		level   := "INFO"
+		if status >= 500 { level = "ERROR" } else if status >= 400 { level = "WARN" }
+		msg := fmt.Sprintf("%s %s → %d (%dms)", method, path, status, durMS)
+		return &LogEntry{
+			ServiceName: serv,
+			UserID:      userID,
+			ActorType:   "user",
+			Action:      subject,
+			Level:       level,
+			Message:     msg,
+			IPAddress:   ip,
+			RequestID:   reqID,
+			DurationMS:  &durMS,
+			CreatedAt:   time.Now(),
+		}
+	}
+
+	actorType := "system"
+	if _, ok := payload["actor_id"]; ok {
+		actorType = "admin"
+	}
+
+	messages := map[string]string{
+		"user.registered":         "New user registered",
+		"user.verified":           "Email verified",
+		"user.login":              "User logged in",
+		"user.password_changed":   "Password changed",
+		"user.suspended":          "User suspended",
+		"user.2fa_enabled":        "Two-factor authentication enabled",
+		"user.2fa_disabled":       "Two-factor authentication disabled (by user)",
+		"user.2fa_admin_disabled": "Two-factor authentication force-disabled by admin",
+		"user.admin_updated":      "User profile/role/status updated by admin",
+	}
+
+	msg, ok := messages[subject]
+	if !ok {
+		msg = fmt.Sprintf("Event: %s", subject)
+	}
+	// Append reason for suspension
+	if subject == "user.suspended" {
+		if r, ok := payload["reason"].(string); ok && r != "" {
+			msg += ": " + r
+		}
+	}
+
+	return &LogEntry{
+		ServiceName:  serviceFromSubject(subject),
+		UserID:        str("user_id"),
+		ActorType:    actorType,
+		Action:       subject,
+		Level:        "INFO",
+		ResourceType: strPtr("user"),
+		ResourceID:   str("user_id"),
+		Message:      msg,
+		CreatedAt:    time.Now(),
+	}
+}
+
+// strVal safely extracts a string from a map[string]any.
+func strVal(m map[string]any, key string) string {
+	v, _ := m[key].(string)
+	return v
+}
+
+// numVal safely extracts a float64/int from a map[string]any.
+func numVal(m map[string]any, key string) float64 {
+	v, _ := m[key].(float64)
+	return v
+}
+
+func strPtr(s string) *string { return &s }
+
 func persistLog(ctx context.Context, db *sqlx.DB, e *LogEntry) error {
 	q := `INSERT INTO logs.entries
-		(service_name, user_id, actor_type, action, level, message, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	_, err := db.ExecContext(ctx, q, e.ServiceName, e.UserID, e.ActorType, e.Action, e.Level, e.Message, e.CreatedAt)
+		(service_name, user_id, actor_type, action, level, resource_type, resource_id, message, request_id, ip_address, duration_ms, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+	_, err := db.ExecContext(ctx, q,
+		e.ServiceName, e.UserID, e.ActorType, e.Action, e.Level,
+		e.ResourceType, e.ResourceID, e.Message,
+		e.RequestID, e.IPAddress, e.DurationMS, e.CreatedAt)
 	return err
 }
 
-func listAllLogs(ctx context.Context, db *sqlx.DB, offset, limit int) ([]*LogEntry, int, error) {
+func listLogs(ctx context.Context, db *sqlx.DB, userID, action, service string, offset, limit int) ([]*LogEntry, int, error) {
+	wheres := []string{"1=1"}
+	args := []any{}
+	i := 1
+	if userID != "" {
+		wheres = append(wheres, fmt.Sprintf("user_id = $%d", i)); args = append(args, userID); i++
+	}
+	if action != "" {
+		wheres = append(wheres, fmt.Sprintf("action = $%d", i)); args = append(args, action); i++
+	}
+	if service != "" {
+		wheres = append(wheres, fmt.Sprintf("service_name = $%d", i)); args = append(args, service); i++
+	}
+	where := joinAnd(wheres)
+	countQ := fmt.Sprintf("SELECT COUNT(*) FROM logs.entries WHERE %s", where)
 	var total int
-	_ = db.GetContext(ctx, &total, `SELECT COUNT(*) FROM logs.entries`)
+	_ = db.GetContext(ctx, &total, countQ, args...)
+	cols := `id, service_name, user_id, actor_type, action, level, resource_type, resource_id, message, duration_ms, ip_address::text AS ip_address, created_at`
+	listArgs := append(args, limit, offset)
+	listQ := fmt.Sprintf("SELECT %s FROM logs.entries WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d",
+		cols, where, i, i+1)
 	var entries []*LogEntry
-	err := db.SelectContext(ctx, &entries, `SELECT * FROM logs.entries ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+	err := db.SelectContext(ctx, &entries, listQ, listArgs...)
 	return entries, total, err
 }
 
-func listUserLogs(ctx context.Context, db *sqlx.DB, userID string, offset, limit int) ([]*LogEntry, int, error) {
-	var total int
-	_ = db.GetContext(ctx, &total, `SELECT COUNT(*) FROM logs.entries WHERE user_id=$1`, userID)
-	var entries []*LogEntry
-	err := db.SelectContext(ctx, &entries, `SELECT * FROM logs.entries WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
-	return entries, total, err
+func joinAnd(s []string) string {
+	result := ""
+	for idx, v := range s {
+		if idx > 0 { result += " AND " }
+		result += v
+	}
+	return result
 }
 
 func serviceFromSubject(subject string) string {

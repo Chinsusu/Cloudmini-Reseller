@@ -8,6 +8,68 @@ All notable changes to Cloudmini Reseller Platform are documented here.
 
 ---
 
+## [0.8.0] — 2026-03-07
+
+### Added — Audit Logging System
+- **`pkg/middleware/auditlogger.go`** — Reusable HTTP audit middleware (`AuditLog`) wrapping all mutating requests (POST/PUT/PATCH/DELETE) + 4xx/5xx errors. Publishes `sys.http_request` NATS events with method, path, status, duration, user_id, ip_address.
+- **`NATSAuditLogger`** — NATS-backed implementation of `AuditLogger` interface; fire-and-forget, never blocks request path.
+- **`AuditLog` middleware** wired into all 5 backend services (user/reseller/billing/proxy/vps) via updated `NewRouter(h, jwtSecret, auditLogger)` signature.
+- **`sys.>`** subject added to shared `PVP_EVENTS` JetStream stream so log-service can consume HTTP audit events.
+- **`sys.http_request` consumer** in log-service `buildEntry`: level auto-set (`INFO` / `WARN` 4xx / `ERROR` 5xx), message format `METHOD /path → STATUS (Nms)`.
+- **`logs.entries` `persistLog`** extended: now saves `request_id`, `ip_address`, `duration_ms` for HTTP audit entries.
+
+### Added — User Audit Events (user-service → NATS)
+- `user.2fa_enabled` — published after EnableTOTP succeeds
+- `user.2fa_disabled` — published after DisableTOTP succeeds  
+- `user.2fa_admin_disabled` — published by admin with actorID
+- `user.admin_updated` — published after AdminUpdateProfile/Role/Status
+- `AdminDisable2FA` handler now extracts `actorID` from JWT context for audit trail
+
+### Added — Frontend Audit Log Component
+- **`AuditLog.tsx`** — Reusable component: timeline view, actor badge (user/admin/system), level coloring, pagination
+- **`/admin/logs`** — Dedicated audit log page with filter by action + user ID; shows all system + user events
+- **`/admin/users`** EditModal → "Activity" tab shows per-user audit history via `AuditLog` component
+- **Sidebar** → "Audit Logs" link with `ClipboardList` icon
+
+### Fixed — NATS JetStream Stream Conflicts
+- `vps-service`: removed self-managed `VPS_PROVISION` and `BILLING_EVENTS` stream creation; now uses shared `PVP_EVENTS` stream (managed by log-service). Prevents startup conflicts.
+
+### Fixed — Token Refresh Race Condition
+- **`api.ts` interceptor**: deduplicated `POST /auth/refresh` using shared promise. Previously, concurrent 401s (parallel page requests) triggered simultaneous refresh calls → session revoked mid-flight → 500 errors. Now only one refresh runs; others await the same promise.
+- Refresh token cookie now updated on rotation (previously only access token was saved).
+
+---
+
+## [0.7.0] — 2026-03-07
+
+### Added — Frontend Pages
+- **`/dashboard/proxy`** — Proxy Orders page: paginated table, lazy credentials reveal (View/Hide/Copy), cancel with ConfirmDialog
+- **`/dashboard/wallet`** — Wallet page: balance cards (total/available/hold), top-up form (multi payment method), paginated transaction history with credit/debit coloring
+- **`/dashboard/profile`** — Profile page: user info card with avatar, change password form (client validation), active sessions table with revoke
+- **`/reseller`** — Reseller Dashboard: 4 stats cards + 4 quick-link navigation cards
+- **`/reseller/pricing`** — Pricing Management: inline editable sell price, auto markup % calc, floor price validation
+- **`/reseller/api-keys`** — migrated from raw Sidebar → AppLayout + useToast + useConfirm; one-time plaintext key banner
+- **`/reseller/accounts`** — Sub-Accounts: list + add by user UUID + credit limit
+- **`/reseller/webhooks`** — Webhooks: create with event-picker toggle buttons, delete with confirm, HMAC secret field
+
+### Changed — Sidebar Navigation
+- `adminNav`: thêm **SERVICES** group (Proxy Orders, VPS Instances) + **MY ACCOUNT** group (Wallet, Profile)
+- `userNav`: đổi "Settings" → "Profile" (`/dashboard/profile`)
+- `resellerAPI` in `api.ts`: thêm `createSubAccount`, `deleteWebhook`, pagination param cho `listSubAccounts`
+
+### Fixed — Backend
+- **`GET /api/v1/admin/resellers` 500**: `ResellerAccount` Go struct thiếu field `Slug *string db:"slug"` — DB migration 000002 có column này nhưng struct không map → sqlx `SELECT *` panic. Đã thêm field.
+- **`/reseller/users` & `/reseller/webhooks` 404**: `mustResellerID()` đọc header `X-Reseller-ID` không bao giờ được set → luôn trả zero UUID. Replaced bằng `h.mustResellerID(w, r)` method — lookup reseller từ JWT `user_id` qua `GetResellerByUserID`. Áp dụng cho toàn bộ 11 handlers.
+
+### Added — Test Accounts
+- `user@test.com` / `User123!` — role: user (active)
+- `reseller@test.com` / `Reseller123!` — role: reseller (active)
+
+### Added — Documentation
+- `docs/19-FRONTEND-WORKFLOWS.md` — Mermaid flowcharts cho 13 user flows (all pages + global token refresh + error handling)
+- `docs/20-FRONTEND-DESIGN.md` — Design specification từng URL (layout, components, APIs, validation logic)
+
+---
 ## [0.6.0] — 2026-03-07
 
 ### Added
