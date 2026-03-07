@@ -104,17 +104,6 @@ export function Sidebar() {
                 <span className="logo-text">Cloudmini</span>
             </div>
 
-            {/* User info */}
-            {user && (
-                <div className="sidebar-user">
-                    <div className="user-avatar">{initials}</div>
-                    <div>
-                        <p className="user-name">{user.fullName || user.email}</p>
-                        <span className="user-role">{user.role}</span>
-                    </div>
-                </div>
-            )}
-
             {/* Navigation groups */}
             {navGroups.map(({ group, items }) => (
                 <div key={group}>
@@ -138,8 +127,17 @@ export function Sidebar() {
                 </div>
             ))}
 
-            {/* Logout */}
+            {/* User + Logout at bottom */}
             <div className="sidebar-bottom">
+                {user && (
+                    <div className="sidebar-user" style={{ marginBottom: '.5rem' }}>
+                        <div className="user-avatar">{initials}</div>
+                        <div>
+                            <p className="user-name">{user.fullName || user.email}</p>
+                            <span className="user-role">{user.role}</span>
+                        </div>
+                    </div>
+                )}
                 <button onClick={handleLogout} className="sidebar-logout">
                     <LogOut size={17} />
                     <span>Log Out</span>
