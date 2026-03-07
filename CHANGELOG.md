@@ -8,6 +8,43 @@ All notable changes to Cloudmini Reseller Platform are documented here.
 
 ---
 
+## [0.6.0] — 2026-03-07
+
+### Added
+- **Topbar component** (`Topbar.tsx`): search input, notification bell with dot, user avatar, mobile hamburger menu
+- **AppLayout component** (`AppLayout.tsx`): shared layout wrapper (Sidebar + Topbar + page-main), mobile sidebar state management with overlay
+- **Toast notifications** (`Toast.tsx`): `useToast()` hook, 4 types (success/error/warning/info), auto-dismiss 4s, slide-in animation, no external library
+- **ConfirmDialog** (`ConfirmDialog.tsx`): promise-based `useConfirm()` hook (`const ok = await confirm({title, message})`), danger/primary variants
+- **Pagination component** (`Pagination.tsx`): ellipsis logic, from–to count, prev/next buttons
+- **Systemd service** (`cloudmini.service`): auto-start all containers on server reboot
+
+### Changed
+- **UI redesign (Vuexy-inspired light theme)**:
+  - `globals.css` full rewrite: purple primary `#7367F0`, light bg `#F8F7FA`, Public Sans font, white sidebar, pill badges, subtle shadows
+  - Sidebar: nav groups (OVERVIEW/MANAGEMENT/DEVELOPER/SERVICES/ACCOUNT) per role, user info + logout in single flex row at bottom
+  - All pages migrated to `AppLayout` with breadcrumbs
+- **Dashboard page**: Vuexy gradient StatCards, credit/debit coloring in transactions table
+- **Admin page**: Pagination + `useToast` + `useConfirm` for approve/suspend actions
+- **Admin Users page**: Pagination (15/page), avatar initials
+- **VPS page**: `useToast` action feedback, `useConfirm` before terminate
+- **CSS additions**: topbar, toast (slideInRight animation), modal (scaleIn animation), pagination, mobile responsive sidebar (`≤768px`)
+- **Next.js** upgraded `14.2.3 → 14.2.35` (patches 1 critical + multiple high CVEs: cache poisoning, DoS, SSRF, auth bypass)
+
+### Fixed
+- **Reseller SQL List bug**: `pq: could not determine data type of parameter $1` error when `status=""` — rewritten with explicit if/else branches
+- **`/api/v1/me` 404**: Fixed `api.ts` endpoint `/v1/me` → `/v1/users/me` (matching gateway route mount)
+- **`TypeError: Cannot read properties of undefined ('0')`**: Added optional chaining `u.email?.[0]` in admin/users page
+
+### Security
+- Next.js 14.2.35: fixes GHSA-gp8f-8m3g-qvj9 (cache poisoning), GHSA-g77x-44xx-532m (DoS), GHSA-7m27-7ghc-44w9 (DoS server actions), GHSA-3h52-269p-cp9r (info exposure), GHSA-7gfc-8cq8-jh5f (auth bypass), GHSA-4342-x723-ch2f (SSRF)
+
+### Ops
+- Freed ~1.5 GB disk space: removed Go module cache, npm cache, Go build cache, Playwright binaries
+- Docker `restart: unless-stopped` confirmed for all 9 services
+- Systemd `cloudmini.service` enabled for auto-start on reboot
+
+---
+
 ## [0.5.0] — 2026-03-07
 
 ### Added
