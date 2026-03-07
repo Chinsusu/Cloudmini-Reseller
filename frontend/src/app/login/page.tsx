@@ -61,9 +61,9 @@ export default function LoginPage() {
             <div className="auth-card">
                 {/* Logo */}
                 <div className="auth-logo">
-                    <div className="logo-icon">☁</div>
+                    <div className="auth-logo-icon">☁</div>
                     <h1>Cloudmini</h1>
-                    <p>Reseller Platform</p>
+                    <p>Sign in to your account</p>
                 </div>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
