@@ -1,21 +1,25 @@
 'use client'
-import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { vpsAPI } from '@/lib/api'
-import { Sidebar } from '@/components/layout/Sidebar'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Server, Play, Square, RefreshCw, Trash2, Terminal, Plus } from 'lucide-react'
 
 const statusColor: Record<string, string> = {
-    running: '#10b981', pending: '#f59e0b', provisioning: '#6366f1',
-    suspended: '#ef4444', terminated: '#6b7280', failed: '#ef4444',
+    running: '#28C76F', pending: '#FF9F43', provisioning: '#7367F0',
+    booting: '#00CFE8', suspended: '#EA5455', terminated: '#A8AAAE', failed: '#EA5455',
 }
 
 export default function VPSPage() {
     const qc = useQueryClient()
+    const { success, error: toastError } = useToast()
+    const { confirm, dialog: confirmDialog } = useConfirm()
+
     const { data, isLoading } = useQuery({
         queryKey: ['vps-list'],
         queryFn: () => vpsAPI.listInstances(),
-        refetchInterval: 10_000, // poll every 10s for status updates
+        refetchInterval: 10_000,
     })
     const instances = data?.data?.data ?? []
 
@@ -27,96 +31,105 @@ export default function VPSPage() {
             }
             return ops[op](id)
         },
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['vps-list'] }),
+        onSuccess: (_data, variables) => {
+            qc.invalidateQueries({ queryKey: ['vps-list'] })
+            success(`VPS ${variables.op} action sent`)
+        },
+        onError: () => toastError('Action failed, please try again'),
     })
 
+    const handleDelete = async (id: string, hostname: string) => {
+        const ok = await confirm({
+            title: 'Terminate VPS',
+            message: `Permanently terminate "${hostname}"? This cannot be undone.`,
+            confirmLabel: 'Terminate',
+            variant: 'danger',
+        })
+        if (ok) action.mutate({ id, op: 'delete' })
+    }
+
     return (
-        <div className="page-layout">
-            <Sidebar />
-            <main className="page-main">
-                <div className="page-header">
+        <AppLayout breadcrumb={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'VPS Instances' },
+        ]}>
+            {confirmDialog}
+
+            <div className="page-header">
+                <div>
                     <h1 className="page-title">VPS Instances</h1>
-                    <button className="btn-primary">
-                        <Plus size={16} /> New Instance
-                    </button>
+                    <p className="page-subtitle">{instances.length} instance{instances.length !== 1 ? 's' : ''}</p>
                 </div>
+                <button className="btn-primary">
+                    <Plus size={16} /> New Instance
+                </button>
+            </div>
 
-                {isLoading ? (
-                    <div className="loading-spinner">Loading...</div>
-                ) : instances.length === 0 ? (
-                    <div className="empty-state">
-                        <Server size={48} opacity={0.3} />
-                        <p>No VPS instances yet</p>
-                        <button className="btn-primary">Create your first VPS</button>
-                    </div>
-                ) : (
-                    <div className="vps-grid">
-                        {instances.map((inst: any) => (
-                            <div key={inst.id} className="vps-card">
-                                <div className="vps-card-header">
-                                    <div className="vps-name">
-                                        <span className="status-dot" style={{ background: statusColor[inst.status] }} />
-                                        <span>{inst.hostname}</span>
-                                    </div>
-                                    <span className={`badge badge-${inst.status}`}>{inst.status}</span>
+            {isLoading ? (
+                <div className="loading-spinner">Loading...</div>
+            ) : instances.length === 0 ? (
+                <div className="empty-state">
+                    <Server size={48} opacity={0.3} />
+                    <p>No VPS instances yet</p>
+                    <button className="btn-primary">Create your first VPS</button>
+                </div>
+            ) : (
+                <div className="vps-grid">
+                    {instances.map((inst: any) => (
+                        <div key={inst.id} className="vps-card">
+                            <div className="vps-card-header">
+                                <div className="vps-name">
+                                    <span className="status-dot" style={{ background: statusColor[inst.status] }} />
+                                    <span>{inst.hostname}</span>
                                 </div>
+                                <span className={`badge badge-${inst.status}`}>{inst.status}</span>
+                            </div>
 
-                                <div className="vps-details">
-                                    <div className="vps-detail">
-                                        <span className="label">IP</span>
-                                        <code>{inst.ip_address || 'Pending...'}</code>
-                                    </div>
-                                    <div className="vps-detail">
-                                        <span className="label">Node</span>
-                                        <span>{inst.node_name}</span>
-                                    </div>
+                            <div className="vps-details">
+                                <div className="vps-detail">
+                                    <span className="label">IP</span>
+                                    <code className="font-mono">{inst.ip_address || 'Pending...'}</code>
                                 </div>
-
-                                <div className="vps-actions">
-                                    <button
-                                        className="action-btn green"
-                                        onClick={() => action.mutate({ id: inst.id, op: 'start' })}
-                                        disabled={inst.status === 'running'}
-                                        title="Start"
-                                    >
-                                        <Play size={14} />
-                                    </button>
-                                    <button
-                                        className="action-btn red"
-                                        onClick={() => action.mutate({ id: inst.id, op: 'stop' })}
-                                        disabled={inst.status !== 'running'}
-                                        title="Stop"
-                                    >
-                                        <Square size={14} />
-                                    </button>
-                                    <button
-                                        className="action-btn blue"
-                                        onClick={() => action.mutate({ id: inst.id, op: 'reboot' })}
-                                        disabled={inst.status !== 'running'}
-                                        title="Reboot"
-                                    >
-                                        <RefreshCw size={14} />
-                                    </button>
-                                    <button
-                                        className="action-btn yellow"
-                                        onClick={() => window.open(`/dashboard/vps/${inst.id}/console`, '_blank')}
-                                        title="Console"
-                                    >
-                                        <Terminal size={14} />
-                                    </button>
-                                    <button
-                                        className="action-btn gray"
-                                        onClick={() => { if (confirm('Terminate this VPS?')) action.mutate({ id: inst.id, op: 'delete' }) }}
-                                        title="Terminate"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
+                                <div className="vps-detail">
+                                    <span className="label">Node</span>
+                                    <span>{inst.node_name || '—'}</span>
+                                </div>
+                                <div className="vps-detail">
+                                    <span className="label">Plan</span>
+                                    <span>{inst.plan_name || '—'}</span>
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
-            </main>
-        </div>
+
+                            <div className="vps-actions">
+                                <button
+                                    className="action-btn green" title="Start"
+                                    onClick={() => action.mutate({ id: inst.id, op: 'start' })}
+                                    disabled={inst.status === 'running' || action.isPending}
+                                ><Play size={14} /></button>
+                                <button
+                                    className="action-btn red" title="Stop"
+                                    onClick={() => action.mutate({ id: inst.id, op: 'stop' })}
+                                    disabled={inst.status !== 'running' || action.isPending}
+                                ><Square size={14} /></button>
+                                <button
+                                    className="action-btn blue" title="Reboot"
+                                    onClick={() => action.mutate({ id: inst.id, op: 'reboot' })}
+                                    disabled={inst.status !== 'running' || action.isPending}
+                                ><RefreshCw size={14} /></button>
+                                <button
+                                    className="action-btn yellow" title="Console"
+                                    onClick={() => window.open(`/dashboard/vps/${inst.id}/console`, '_blank')}
+                                ><Terminal size={14} /></button>
+                                <button
+                                    className="action-btn gray" title="Terminate"
+                                    onClick={() => handleDelete(inst.id, inst.hostname)}
+                                    disabled={inst.status === 'terminated' || action.isPending}
+                                ><Trash2 size={14} /></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </AppLayout>
     )
 }

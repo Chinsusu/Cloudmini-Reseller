@@ -1,9 +1,10 @@
 'use client'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { walletAPI, proxyAPI, vpsAPI } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { Wallet, Globe, Server, TrendingUp } from 'lucide-react'
+import { AppLayout } from '@/components/layout/AppLayout'
+import { Wallet, Globe, Server, Activity } from 'lucide-react'
 
 function StatCard({ title, value, sub, icon: Icon, color }: any) {
     return (
@@ -31,52 +32,43 @@ export default function DashboardPage() {
     const vpsCount = vps?.data?.meta?.total ?? 0
 
     return (
-        <div className="page-layout">
-            <Sidebar />
-            <main className="page-main">
-                <div className="page-header">
-                    <h1 className="page-title">Welcome back, {user?.fullName || user?.email} 👋</h1>
-                    <p className="page-subtitle">Here's an overview of your account</p>
+        <AppLayout breadcrumb={[
+            { label: 'Home', href: '/dashboard' },
+            { label: 'Dashboard' },
+        ]}>
+            <div className="page-header">
+                <div>
+                    <h1 className="page-title">Welcome back, {user?.fullName || user?.email}</h1>
+                    <p className="page-subtitle">Overview of your account</p>
                 </div>
+            </div>
 
-                <div className="stats-grid">
-                    <StatCard
-                        title="Wallet Balance"
-                        value={`$${balance}`}
-                        sub="Available credit"
-                        icon={Wallet}
-                        color="linear-gradient(135deg,#6366f1,#8b5cf6)"
-                    />
-                    <StatCard
-                        title="Proxy Orders"
-                        value={orderCount}
-                        sub="Total orders"
-                        icon={Globe}
-                        color="linear-gradient(135deg,#06b6d4,#0ea5e9)"
-                    />
-                    <StatCard
-                        title="VPS Instances"
-                        value={vpsCount}
-                        sub="Total instances"
-                        icon={Server}
-                        color="linear-gradient(135deg,#10b981,#059669)"
-                    />
-                    <StatCard
-                        title="This Month"
-                        value="Active"
-                        sub="Account status"
-                        icon={TrendingUp}
-                        color="linear-gradient(135deg,#f59e0b,#ef4444)"
-                    />
-                </div>
+            <div className="stats-grid">
+                <StatCard
+                    title="Wallet Balance" value={`$${balance}`} sub="Available credit"
+                    icon={Wallet} color="linear-gradient(135deg,#7367F0,#9e95f5)"
+                />
+                <StatCard
+                    title="Proxy Orders" value={orderCount} sub="Total orders"
+                    icon={Globe} color="linear-gradient(135deg,#00CFE8,#1EDEC5)"
+                />
+                <StatCard
+                    title="VPS Instances" value={vpsCount} sub="Total instances"
+                    icon={Server} color="linear-gradient(135deg,#28C76F,#48DA89)"
+                />
+                <StatCard
+                    title="Account Status" value="Active" sub="All systems operational"
+                    icon={Activity} color="linear-gradient(135deg,#FF9F43,#FFB976)"
+                />
+            </div>
 
-                {/* Recent Transactions */}
-                <section className="section">
-                    <h2 className="section-title">Recent Transactions</h2>
+            <section className="section">
+                <h2 className="section-title">Recent Transactions</h2>
+                <div className="card" style={{ padding: 0, marginBottom: 0 }}>
                     <RecentTransactions />
-                </section>
-            </main>
-        </div>
+                </div>
+            </section>
+        </AppLayout>
     )
 }
 
@@ -85,7 +77,7 @@ function RecentTransactions() {
     const txs = data?.data?.data ?? []
 
     if (txs.length === 0) {
-        return <div className="empty-state">No transactions yet</div>
+        return <div className="empty-state"><p>No transactions yet</p></div>
     }
 
     return (
@@ -93,18 +85,30 @@ function RecentTransactions() {
             <table className="data-table">
                 <thead>
                     <tr>
-                        <th>Date</th><th>Type</th><th>Amount</th><th>Status</th>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {txs.map((tx: any) => (
-                        <tr key={tx.id}>
-                            <td>{new Date(tx.created_at).toLocaleDateString()}</td>
-                            <td><span className={`badge badge-${tx.type}`}>{tx.type}</span></td>
-                            <td className={tx.type === 'deduct' ? 'text-red' : 'text-green'}>${tx.amount}</td>
-                            <td><span className="badge badge-success">{tx.status}</span></td>
-                        </tr>
-                    ))}
+                    {txs.map((tx: any) => {
+                        const isCredit = ['deposit', 'refund', 'hold_release', 'adjustment'].includes(tx.type)
+                        return (
+                            <tr key={tx.id}>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>
+                                    {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </td>
+                                <td><span className={`badge badge-${tx.type}`}>{tx.type.replace(/_/g, ' ')}</span></td>
+                                <td style={{ color: 'var(--text-muted)', fontSize: '.85rem' }}>{tx.description || '—'}</td>
+                                <td style={{ fontWeight: 600, color: isCredit ? 'var(--success)' : 'var(--error)' }}>
+                                    {isCredit ? '+' : '-'}${tx.amount}
+                                </td>
+                                <td><span className="badge badge-success">{tx.status}</span></td>
+                            </tr>
+                        )
+                    })}
                 </tbody>
             </table>
         </div>

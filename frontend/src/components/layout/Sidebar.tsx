@@ -73,7 +73,7 @@ const resellerNav = [
     },
 ]
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
     const pathname = usePathname()
     const { user, clearAuth } = useAuthStore()
     const router = useRouter()
@@ -95,7 +95,7 @@ export function Sidebar() {
         : user?.email?.[0]?.toUpperCase() ?? 'U'
 
     return (
-        <aside className="sidebar">
+        <aside className={clsx('sidebar', mobileOpen && 'mobile-open')}>
             {/* Logo */}
             <div className="sidebar-logo">
                 <div className="logo-icon">
