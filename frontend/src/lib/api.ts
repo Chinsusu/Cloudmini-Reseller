@@ -44,7 +44,7 @@ export const authAPI = {
     register: (email: string, password: string, fullName: string) =>
         api.post('/v1/auth/register', { email, password, full_name: fullName }),
     logout: () => api.post('/v1/auth/logout'),
-    me: () => api.get('/v1/me'),
+    me: () => api.get('/v1/users/me'),
 }
 
 // ─── Wallet ────────────────────────────────────────────────────────────────────

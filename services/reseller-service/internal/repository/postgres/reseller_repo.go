@@ -53,26 +53,23 @@ func (r *ResellerRepository) GetByUserID(ctx context.Context, userID uuid.UUID) 
 
 func (r *ResellerRepository) List(ctx context.Context, status string, offset, limit int) ([]*domain.ResellerAccount, int, error) {
 	var total int
-	q := `SELECT COUNT(*) FROM resellers.accounts`
-	args := []any{}
 	if status != "" {
-		q += ` WHERE status=$1`
-		args = append(args, status)
-	}
-	_ = r.db.GetContext(ctx, &total, q, args...)
-
-	qList := `SELECT * FROM resellers.accounts`
-	if status != "" {
-		qList += ` WHERE status=$1`
-	}
-	qList += ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`
-	if status != "" {
-		args = append(args, limit, offset)
+		_ = r.db.GetContext(ctx, &total, `SELECT COUNT(*) FROM resellers.accounts WHERE status=$1`, status)
 	} else {
-		args = []any{limit, offset}
+		_ = r.db.GetContext(ctx, &total, `SELECT COUNT(*) FROM resellers.accounts`)
 	}
+
 	var resellers []*domain.ResellerAccount
-	err := r.db.SelectContext(ctx, &resellers, qList, args...)
+	var err error
+	if status != "" {
+		err = r.db.SelectContext(ctx, &resellers,
+			`SELECT * FROM resellers.accounts WHERE status=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+			status, limit, offset)
+	} else {
+		err = r.db.SelectContext(ctx, &resellers,
+			`SELECT * FROM resellers.accounts ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+			limit, offset)
+	}
 	return resellers, total, err
 }
 

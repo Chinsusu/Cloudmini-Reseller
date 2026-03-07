@@ -54,7 +54,7 @@ export default function UsersPage() {
                                     {users.map((u: any) => {
                                         const initials = u.full_name
                                             ? u.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-                                            : u.email[0].toUpperCase()
+                                            : (u.email?.[0] ?? '?').toUpperCase()
                                         return (
                                             <tr key={u.id}>
                                                 <td>
