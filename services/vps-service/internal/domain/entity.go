@@ -65,28 +65,33 @@ func (n *Node) AvailableRAMMB() int { return n.TotalRAMMB - n.ReservedRAMMB }
 // Instance represents a user's VPS instance.
 // Fields match vps.instances table columns.
 type Instance struct {
-	ID              uuid.UUID      `db:"id"`
-	InstanceNumber  string         `db:"instance_number"`
-	UserID          uuid.UUID      `db:"user_id"`
-	ResellerID      *uuid.UUID     `db:"reseller_id"`
-	PlanID          uuid.UUID      `db:"plan_id"`
-	NodeID          uuid.UUID      `db:"node_id"`
-	NodeName        string         `db:"-"` // derived from node join
-	VMID            int            `db:"vmid"`
-	Hostname        string         `db:"hostname"`
-	Status          string         `db:"status"`
-	IPAddress       string         `db:"ip_address"`
-	SSHPort         int            `db:"ssh_port"`
-	RootPassword    string         `db:"root_password"` // encrypted
-	CPU             int            `db:"cpu_cores"`
-	RAMMB           int            `db:"ram_mb"`
-	DiskGB          int            `db:"disk_gb"`
-	BillingStartedAt *time.Time   `db:"billing_started_at"`
-	LastBilledAt    *time.Time     `db:"last_billed_at"`
-	SuspendedAt     *time.Time     `db:"suspended_at"`
-	TerminatedAt    *time.Time     `db:"terminated_at"`
-	IdempotencyKey  string         `db:"-"` // not a db column in new schema
-	CreatedAt       time.Time      `db:"created_at"`
+	ID               uuid.UUID  `db:"id"`
+	InstanceNumber   string     `db:"instance_number"`
+	UserID           uuid.UUID  `db:"user_id"`
+	ResellerID       *uuid.UUID `db:"reseller_id"`
+	PlanID           uuid.UUID  `db:"plan_id"`
+	NodeID           uuid.UUID  `db:"node_id"`
+	NodeName         string     `db:"node_name"`
+	VMID             int        `db:"vmid"`
+	Hostname         string     `db:"hostname"`
+	OSTemplate       string     `db:"os_template"`
+	Status           string     `db:"status"`
+	IPAddress        string     `db:"ip_address_str"` // string copy of ip_address inet
+	IPv6Address      *string    `db:"ipv6_address"`   // inet → string via cast in query
+	SSHPort          int        `db:"ssh_port"`
+	RootPassword     string     `db:"root_password"` // encrypted
+	CPU              int        `db:"cpu_cores"`
+	RAMMB            int        `db:"ram_mb"`
+	DiskGB           int        `db:"disk_gb"`
+	BillingType      string     `db:"billing_type"`
+	BillingStartedAt *time.Time `db:"billing_started_at"`
+	LastBilledAt     *time.Time `db:"last_billed_at"`
+	SuspendedAt      *time.Time `db:"suspended_at"`
+	TerminatedAt     *time.Time `db:"terminated_at"`
+	IdempotencyKey   string     `db:"idempotency_key"`
+	RequestID        *uuid.UUID `db:"request_id"`
+	CreatedAt        time.Time  `db:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at"`
 }
 
 // Snapshot represents a VM snapshot.

@@ -9,6 +9,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.10.0] — 2026-03-13
+
+### Fixed
+- **vps-service** `BUG-02`: `Instance` struct missing `os_template`, `ipv6_address`, `billing_type`,
+  `ip_address_str`, `request_id`, `updated_at`, `node_name`, `idempotency_key` db tags —
+  caused `missing destination name os_template` 500 errors on all `/vps/instances` calls
+  (`services/vps-service/internal/domain/entity.go`,
+  `services/vps-service/internal/repository/postgres/vps_repo.go`,
+  `services/vps-service/internal/usecase/provision_usecase.go`)
+- **vps-service** `BUG-02`: Replace `SELECT *` with explicit `instanceCols` constant casting
+  `ip_address::text` and `ipv6_address::text` to avoid sqlx `inet` scan errors
+- **vps-service** `BUG-02`: `UpdateAfterProvisioning` now writes both `ip_address` (inet) and
+  `ip_address_str` (text) to avoid driver type errors
+- **vps-service** `BUG-02`: `ProvisionUsecase.CreateVPS` now populates all NOT NULL columns:
+  `instance_number`, `os_template`, `billing_type`, `idempotency_key`
+- **seed** `BUG-03`: Created missing `billing.wallets` rows for `user@test.com` and `reseller@test.com`
+- **seed** `BUG-04`: Created missing `resellers.accounts` row for `reseller@test.com`
+  (status=approved, commission=10%, slug=test-reseller)
+
+
 ### Added
 - Initial project documentation (full suite)
 - System architecture design

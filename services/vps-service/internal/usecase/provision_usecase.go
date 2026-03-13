@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -154,22 +155,29 @@ func (u *ProvisionUsecase) CreateVPS(ctx context.Context, req OrderRequest) (*Or
 	}
 
 	// 4. Create billing hold (1 hour minimum charge)
+	instanceID := uuid.New()
+	// instance_number: short human-readable ID, e.g. "VPS-A1B2C3"
+	instanceNum := "VPS-" + strings.ToUpper(instanceID.String()[:6])
 	instance := &domain.Instance{
-		ID:           uuid.New(),
-		UserID:       req.UserID,
-		ResellerID:   req.ResellerID,
-		PlanID:       req.PlanID,
-		NodeID:       node.ID,
-		NodeName:     node.Name,
-		VMID:         vmid,
-		Hostname:     req.Hostname,
-		Status:       domain.StatusPending,
-		RootPassword: encPass,
-		SSHPort:      22,
-		CPU:          plan.CPU,
-		RAMMB:        plan.RAMMB,
-		DiskGB:       plan.DiskGB,
-		CreatedAt:    time.Now(),
+		ID:             instanceID,
+		InstanceNumber: instanceNum,
+		UserID:         req.UserID,
+		ResellerID:     req.ResellerID,
+		PlanID:         req.PlanID,
+		NodeID:         node.ID,
+		NodeName:       node.Name,
+		VMID:           vmid,
+		Hostname:       req.Hostname,
+		OSTemplate:     plan.Template, // e.g. "ubuntu-22.04"
+		Status:         domain.StatusPending,
+		RootPassword:   encPass,
+		SSHPort:        22,
+		BillingType:    "hourly",
+		CPU:            plan.CPU,
+		RAMMB:          plan.RAMMB,
+		DiskGB:         plan.DiskGB,
+		IdempotencyKey: req.IdempotencyKey,
+		CreatedAt:      time.Now(),
 	}
 
 	if err := u.instanceRepo.Create(ctx, instance); err != nil {

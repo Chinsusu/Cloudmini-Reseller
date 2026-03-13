@@ -131,12 +131,34 @@ type InstanceRepository struct{ db *sqlx.DB }
 
 func NewInstanceRepository(db *sqlx.DB) *InstanceRepository { return &InstanceRepository{db: db} }
 
+// instanceCols is an explicit column list that casts inet types to text so
+// sqlx can scan them into Go string fields without driver errors.
+const instanceCols = `
+	id, instance_number, user_id, reseller_id, plan_id, node_id,
+	COALESCE(node_name, '') AS node_name,
+	COALESCE(vmid, 0) AS vmid,
+	hostname,
+	COALESCE(os_template, '') AS os_template,
+	status,
+	COALESCE(ip_address_str, ip_address::text, '') AS ip_address_str,
+	COALESCE(ipv6_address::text, '') AS ipv6_address,
+	COALESCE(ssh_port, 22) AS ssh_port,
+	COALESCE(root_password, '') AS root_password,
+	cpu_cores, ram_mb, disk_gb,
+	COALESCE(billing_type, 'hourly') AS billing_type,
+	billing_started_at, last_billed_at, suspended_at, terminated_at,
+	COALESCE(idempotency_key, '') AS idempotency_key,
+	request_id,
+	created_at, updated_at`
+
 func (r *InstanceRepository) Create(ctx context.Context, inst *domain.Instance) error {
 	q := `INSERT INTO vps.instances
-		(id,user_id,reseller_id,plan_id,node_id,node_name,vmid,hostname,status,
-		 root_password,idempotency_key,ssh_port,created_at,updated_at)
-		VALUES (:id,:user_id,:reseller_id,:plan_id,:node_id,:node_name,:vmid,:hostname,
-		 :status,:root_password,:idempotency_key,:ssh_port,:created_at,:updated_at)`
+		(id, instance_number, user_id, reseller_id, plan_id, node_id, node_name,
+		 vmid, hostname, os_template, status, root_password, idempotency_key,
+		 ssh_port, billing_type, cpu_cores, ram_mb, disk_gb, created_at, updated_at)
+		VALUES (:id, :instance_number, :user_id, :reseller_id, :plan_id, :node_id, :node_name,
+		 :vmid, :hostname, :os_template, :status, :root_password, :idempotency_key,
+		 :ssh_port, :billing_type, :cpu_cores, :ram_mb, :disk_gb, NOW(), NOW())`
 	if _, err := r.db.NamedExecContext(ctx, q, inst); err != nil {
 		return fmt.Errorf("InstanceRepository.Create: %w", err)
 	}
@@ -145,7 +167,8 @@ func (r *InstanceRepository) Create(ctx context.Context, inst *domain.Instance) 
 
 func (r *InstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Instance, error) {
 	var inst domain.Instance
-	if err := r.db.GetContext(ctx, &inst, `SELECT * FROM vps.instances WHERE id=$1 AND terminated_at IS NULL`, id); err != nil {
+	q := `SELECT` + instanceCols + ` FROM vps.instances WHERE id=$1 AND terminated_at IS NULL`
+	if err := r.db.GetContext(ctx, &inst, q, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrInstanceNotFound
 		}
@@ -156,7 +179,8 @@ func (r *InstanceRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 
 func (r *InstanceRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domain.Instance, error) {
 	var inst domain.Instance
-	if err := r.db.GetContext(ctx, &inst, `SELECT * FROM vps.instances WHERE idempotency_key=$1`, key); err != nil {
+	q := `SELECT` + instanceCols + ` FROM vps.instances WHERE idempotency_key=$1`
+	if err := r.db.GetContext(ctx, &inst, q, key); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrInstanceNotFound
 		}
@@ -175,8 +199,13 @@ func (r *InstanceRepository) UpdateStatus(ctx context.Context, id uuid.UUID, sta
 }
 
 func (r *InstanceRepository) UpdateAfterProvisioning(ctx context.Context, id uuid.UUID, vmid int, ip, rootPass string, billedAt time.Time) error {
-	q := `UPDATE vps.instances SET status='running', vmid=$1, ip_address=$2, root_password=$3,
-		billing_started_at=$4, last_billed_at=$4, updated_at=NOW() WHERE id=$5`
+	q := `UPDATE vps.instances SET
+		status='running', vmid=$1,
+		ip_address=NULLIF($2,'')::inet,
+		ip_address_str=$2,
+		root_password=$3,
+		billing_started_at=$4, last_billed_at=$4, updated_at=NOW()
+		WHERE id=$5`
 	if _, err := r.db.ExecContext(ctx, q, vmid, ip, rootPass, billedAt, id); err != nil {
 		return fmt.Errorf("InstanceRepository.UpdateAfterProvisioning: %w", err)
 	}
@@ -194,20 +223,23 @@ func (r *InstanceRepository) UpdateLastBilled(ctx context.Context, id uuid.UUID,
 
 func (r *InstanceRepository) ListByUser(ctx context.Context, userID uuid.UUID, offset, limit int) ([]*domain.Instance, int, error) {
 	var total int
-	if err := r.db.GetContext(ctx, &total, `SELECT COUNT(*) FROM vps.instances WHERE user_id=$1 AND terminated_at IS NULL`, userID); err != nil {
+	if err := r.db.GetContext(ctx, &total,
+		`SELECT COUNT(*) FROM vps.instances WHERE user_id=$1 AND terminated_at IS NULL`, userID,
+	); err != nil {
 		return nil, 0, err
 	}
 	var insts []*domain.Instance
-	err := r.db.SelectContext(ctx, &insts,
-		`SELECT * FROM vps.instances WHERE user_id=$1 AND terminated_at IS NULL ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-		userID, limit, offset)
+	q := `SELECT` + instanceCols + ` FROM vps.instances
+		WHERE user_id=$1 AND terminated_at IS NULL
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	err := r.db.SelectContext(ctx, &insts, q, userID, limit, offset)
 	return insts, total, err
 }
 
 func (r *InstanceRepository) ListRunning(ctx context.Context) ([]*domain.Instance, error) {
 	var insts []*domain.Instance
-	err := r.db.SelectContext(ctx, &insts,
-		`SELECT * FROM vps.instances WHERE status='running' AND terminated_at IS NULL`)
+	q := `SELECT` + instanceCols + ` FROM vps.instances WHERE status='running' AND terminated_at IS NULL`
+	err := r.db.SelectContext(ctx, &insts, q)
 	return insts, err
 }
 
@@ -215,6 +247,7 @@ func (r *InstanceRepository) SoftDelete(ctx context.Context, id uuid.UUID) error
 	_, err := r.db.ExecContext(ctx, `UPDATE vps.instances SET terminated_at=NOW(), updated_at=NOW() WHERE id=$1`, id)
 	return err
 }
+
 
 // ─── SnapshotRepository ───────────────────────────────────────────────────────
 
