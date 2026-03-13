@@ -36,6 +36,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   response envelope (`(d.data as any)?.data`) so `full_name`, `email`, `role` display correctly
 - **frontend** `BUG-07`: Change balance fallback from `—` to `Chưa có ví` for clearer UX
   when admin billing API returns 404 for users without a wallet row
+- **reseller-service** `BUG-06`: Change `ResellerAccount` nullable fields (`email`, `phone`,
+  `address`, `tax_id`, `api_key_prefix`, `notes`, `suspend_reason`) from `string` to `*string`
+  to fix `converting NULL to string is unsupported` error on reseller account scan
+- **reseller-service** `BUG-06`: Add `apiKeyCols` and `webhookCols` explicit column lists
+  that exclude `text[]` columns (`scopes`, `events`) which sqlx cannot auto-scan with `db:"-"` tag
+- **reseller-service** `BUG-06`: Add `strPtr()` helper in usecase for safe `string → *string` conversion
 
 
 ### Added
