@@ -317,7 +317,7 @@ function UserRow({ u, onEdit, onDelete, onDisable2FA, onTopUp }: {
                         {formatVND(balance)}
                     </span>
                 ) : (
-                    <span style={{ color: 'var(--text-muted)', fontSize: '.78rem' }}>—</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '.75rem', fontStyle: 'italic' }}>Chưa có ví</span>
                 )}
             </td>
             {/* Total Services */}

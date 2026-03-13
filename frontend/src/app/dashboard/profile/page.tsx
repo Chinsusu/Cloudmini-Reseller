@@ -187,7 +187,7 @@ export default function ProfilePage() {
     const { data, isLoading } = useQuery({
         queryKey: ['me'],
         queryFn: () => authAPI.me(),
-        select: (d) => d.data,
+        select: (d) => (d.data as any)?.data ?? d.data,
     })
 
     const user = data
