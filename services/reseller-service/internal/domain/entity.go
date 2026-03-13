@@ -23,19 +23,19 @@ type ResellerAccount struct {
 	UserID        uuid.UUID       `db:"user_id"` // linked user account
 	CompanyName   string          `db:"company_name"`
 	Slug          *string         `db:"slug"`           // for white-label subdomain (nullable)
-	Email         string          `db:"email"`
-	Phone         string          `db:"phone"`
-	Address       string          `db:"address"`
-	TaxID         string          `db:"tax_id"`
+	Email         *string         `db:"email"`          // nullable — may not be set on seed
+	Phone         *string         `db:"phone"`          // nullable
+	Address       *string         `db:"address"`        // nullable
+	TaxID         *string         `db:"tax_id"`         // nullable
 	Status        string          `db:"status"` // pending|approved|suspended
-	APIKeyPrefix  string          `db:"api_key_prefix"`
+	APIKeyPrefix  *string         `db:"api_key_prefix"` // nullable
 	WalletID      *uuid.UUID      `db:"wallet_id"`
 	CreditLimit   decimal.Decimal `db:"credit_limit"`
 	CommissionPct decimal.Decimal `db:"commission_pct"` // 0-100
-	Notes         string          `db:"notes"`
+	Notes         *string         `db:"notes"`           // nullable
 	ApprovedAt    *time.Time      `db:"approved_at"`
 	SuspendedAt   *time.Time      `db:"suspended_at"`
-	SuspendReason string          `db:"suspend_reason"`
+	SuspendReason *string         `db:"suspend_reason"` // nullable
 	CreatedAt     time.Time       `db:"created_at"`
 	UpdatedAt     time.Time       `db:"updated_at"`
 }

@@ -64,10 +64,10 @@ func (u *ResellerUsecase) CreateReseller(ctx context.Context, req CreateReseller
 		ID:            uuid.New(),
 		UserID:        req.UserID,
 		CompanyName:   req.CompanyName,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		Address:       req.Address,
-		TaxID:         req.TaxID,
+		Email:         strPtr(req.Email),
+		Phone:         strPtr(req.Phone),
+		Address:       strPtr(req.Address),
+		TaxID:         strPtr(req.TaxID),
 		Status:        domain.StatusPending,
 		CommissionPct: req.CommissionPct,
 		CreatedAt:     time.Now(),
@@ -85,6 +85,15 @@ func (u *ResellerUsecase) CreateReseller(ctx context.Context, req CreateReseller
 	)
 	return reseller, nil
 }
+
+// strPtr converts a string to *string, returning nil if empty.
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 
 // ApproveReseller approves a pending reseller (admin only).
 func (u *ResellerUsecase) ApproveReseller(ctx context.Context, resellerID uuid.UUID) (*domain.ResellerAccount, error) {

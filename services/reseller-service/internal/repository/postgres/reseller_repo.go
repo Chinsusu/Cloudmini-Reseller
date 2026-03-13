@@ -133,10 +133,13 @@ type APIKeyRepository struct{ db *sqlx.DB }
 
 func NewAPIKeyRepository(db *sqlx.DB) *APIKeyRepository { return &APIKeyRepository{db: db} }
 
+// apiKeyCols excludes text[] scopes column which needs array scanning beyond basic sqlx
+const apiKeyCols = `id, reseller_id, name, key_hash, key_prefix, last_used_at, expires_at, revoked_at, created_at`
+
 func (r *APIKeyRepository) Create(ctx context.Context, k *domain.ResellerAPIKey) error {
 	q := `INSERT INTO resellers.api_keys
-		(id,reseller_id,name,key_hash,key_prefix,expires_at,created_at)
-		VALUES (:id,:reseller_id,:name,:key_hash,:key_prefix,:expires_at,:created_at)`
+		(id,reseller_id,name,key_hash,key_prefix,scopes,expires_at,created_at)
+		VALUES (:id,:reseller_id,:name,:key_hash,:key_prefix,ARRAY[]::text[],:expires_at,:created_at)`
 	if _, err := r.db.NamedExecContext(ctx, q, k); err != nil {
 		return fmt.Errorf("APIKeyRepository.Create: %w", err)
 	}
@@ -146,7 +149,7 @@ func (r *APIKeyRepository) Create(ctx context.Context, k *domain.ResellerAPIKey)
 func (r *APIKeyRepository) GetByHash(ctx context.Context, hash string) (*domain.ResellerAPIKey, error) {
 	var k domain.ResellerAPIKey
 	if err := r.db.GetContext(ctx, &k,
-		`SELECT * FROM resellers.api_keys WHERE key_hash=$1 AND revoked_at IS NULL`, hash); err != nil {
+		`SELECT `+apiKeyCols+` FROM resellers.api_keys WHERE key_hash=$1 AND revoked_at IS NULL`, hash); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrAPIKeyNotFound
 		}
@@ -158,7 +161,7 @@ func (r *APIKeyRepository) GetByHash(ctx context.Context, hash string) (*domain.
 func (r *APIKeyRepository) ListByReseller(ctx context.Context, resellerID uuid.UUID) ([]*domain.ResellerAPIKey, error) {
 	var keys []*domain.ResellerAPIKey
 	err := r.db.SelectContext(ctx, &keys,
-		`SELECT * FROM resellers.api_keys WHERE reseller_id=$1 ORDER BY created_at DESC`, resellerID)
+		`SELECT `+apiKeyCols+` FROM resellers.api_keys WHERE reseller_id=$1 ORDER BY created_at DESC`, resellerID)
 	return keys, err
 }
 
@@ -219,6 +222,9 @@ type WebhookRepository struct{ db *sqlx.DB }
 
 func NewWebhookRepository(db *sqlx.DB) *WebhookRepository { return &WebhookRepository{db: db} }
 
+// webhookCols excludes events text[] column
+const webhookCols = `id, reseller_id, url, secret, is_active, created_at`
+
 func (r *WebhookRepository) Create(ctx context.Context, w *domain.ResellerWebhook) error {
 	q := `INSERT INTO resellers.webhooks (id,reseller_id,url,secret,is_active,created_at)
 		  VALUES (:id,:reseller_id,:url,:secret,:is_active,:created_at)`
@@ -230,7 +236,8 @@ func (r *WebhookRepository) Create(ctx context.Context, w *domain.ResellerWebhoo
 
 func (r *WebhookRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.ResellerWebhook, error) {
 	var w domain.ResellerWebhook
-	if err := r.db.GetContext(ctx, &w, `SELECT * FROM resellers.webhooks WHERE id=$1`, id); err != nil {
+	if err := r.db.GetContext(ctx, &w,
+		`SELECT `+webhookCols+` FROM resellers.webhooks WHERE id=$1`, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrWebhookNotFound
 		}
@@ -242,7 +249,7 @@ func (r *WebhookRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 func (r *WebhookRepository) ListByReseller(ctx context.Context, resellerID uuid.UUID) ([]*domain.ResellerWebhook, error) {
 	var webhooks []*domain.ResellerWebhook
 	err := r.db.SelectContext(ctx, &webhooks,
-		`SELECT * FROM resellers.webhooks WHERE reseller_id=$1 AND is_active=true`, resellerID)
+		`SELECT `+webhookCols+` FROM resellers.webhooks WHERE reseller_id=$1 AND is_active=true`, resellerID)
 	return webhooks, err
 }
 

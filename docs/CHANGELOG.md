@@ -29,6 +29,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **seed** `BUG-03`: Created missing `billing.wallets` rows for `user@test.com` and `reseller@test.com`
 - **seed** `BUG-04`: Created missing `resellers.accounts` row for `reseller@test.com`
   (status=approved, commission=10%, slug=test-reseller)
+- **frontend** `BUG-01`: Add `src/middleware.ts` Next.js route guard — reads `pvp_token` cookie,
+  decodes JWT role, redirects `/admin` (admin only), `/reseller` (reseller only),
+  `/dashboard` (authenticated only)
+- **frontend** `BUG-05`: Fix profile page query `select` to properly unwrap backend's `{data:{...}}`
+  response envelope (`(d.data as any)?.data`) so `full_name`, `email`, `role` display correctly
+- **frontend** `BUG-07`: Change balance fallback from `—` to `Chưa có ví` for clearer UX
+  when admin billing API returns 404 for users without a wallet row
 
 
 ### Added
