@@ -68,6 +68,8 @@ type CreateOrderRequest struct {
 	Quantity       int
 	IdempotencyKey string
 	RequestID      *uuid.UUID
+	// Metadata passes provider-specific parameters (e.g. Proxy-Cheap service_id, plan_id).
+	Metadata map[string]string
 }
 
 // CreateOrder runs the 7-step Saga:
@@ -151,6 +153,9 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		ProductID: product.ID.String(),
 		Quantity:  req.Quantity,
 		OrderID:   order.ID.String(),
+		Country:   product.Location,
+		Protocol:  product.Protocol,
+		Metadata:  req.Metadata,
 	})
 	if err != nil {
 		// Compensate: release hold
@@ -160,7 +165,30 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		return nil, fmt.Errorf("CreateOrder step4: %w: %w", domain.ErrProviderPurchase, err)
 	}
 
-	// ── Step 5: Encrypt credentials ────────────────────────────────────────
+	// ── Step 5: Async or sync credential handling ──────────────────────────
+	// Async providers (e.g. Proxy-Cheap) return nil Credentials.
+	// In that case we store providerOrderID and set status=processing.
+	// The webhook usecase will fulfill the order when the proxy becomes ACTIVE.
+	if purchaseResult.Credentials == nil {
+		// Store provider order ID, keep billing hold — webhook will confirm it
+		if err := u.orderRepo.UpdateAfterPurchase(ctx, order.ID,
+			purchaseResult.ProviderOrderID, "", nil, nil,
+		); err != nil {
+			_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+			_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
+			return nil, fmt.Errorf("CreateOrder step5 (async): save provider order id: %w", err)
+		}
+		_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderProcessing)
+		order.Status = domain.OrderProcessing
+		order.ProviderOrderID = purchaseResult.ProviderOrderID
+		u.logger.InfoContext(ctx, "proxy order purchasing (async provider)",
+			slog.String("order_id", order.ID.String()),
+			slog.String("provider_order_id", purchaseResult.ProviderOrderID),
+		)
+		return order, nil
+	}
+
+	// Sync provider: encrypt credentials immediately
 	credJSON, _ := json.Marshal(purchaseResult.Credentials)
 	encryptedCreds, err := u.cipher.Encrypt(credJSON)
 	if err != nil {

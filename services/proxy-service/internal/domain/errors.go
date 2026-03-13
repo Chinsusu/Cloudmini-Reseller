@@ -11,4 +11,5 @@ var (
 	ErrProviderPurchase    = errors.New("provider purchase failed")
 	ErrCredentialEncrypt   = errors.New("failed to encrypt credentials")
 	ErrOrderNotCancellable = errors.New("order cannot be cancelled in current status")
+	ErrProviderBalance     = errors.New("provider account has insufficient balance")
 )

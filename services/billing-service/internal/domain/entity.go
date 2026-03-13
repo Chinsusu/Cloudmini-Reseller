@@ -25,15 +25,15 @@ const (
 
 // Wallet holds user balance and hold amount.
 type Wallet struct {
-	ID                  uuid.UUID       `db:"id"`
-	UserID              uuid.UUID       `db:"user_id"`
-	Balance             decimal.Decimal `db:"balance"`
-	HoldAmount          decimal.Decimal `db:"hold_amount"`
-	Currency            string          `db:"currency"`
-	LowBalanceThreshold decimal.Decimal `db:"low_balance_threshold"`
-	LastAlertAt         *time.Time      `db:"last_alert_at"`
-	CreatedAt           time.Time       `db:"created_at"`
-	UpdatedAt           time.Time       `db:"updated_at"`
+	ID                  uuid.UUID       `db:"id"                    json:"id"`
+	UserID              uuid.UUID       `db:"user_id"               json:"user_id"`
+	Balance             decimal.Decimal `db:"balance"               json:"balance"`
+	HoldAmount          decimal.Decimal `db:"hold_amount"           json:"hold_amount"`
+	Currency            string          `db:"currency"              json:"currency"`
+	LowBalanceThreshold decimal.Decimal `db:"low_balance_threshold" json:"low_balance_threshold"`
+	LastAlertAt         *time.Time      `db:"last_alert_at"         json:"last_alert_at,omitempty"`
+	CreatedAt           time.Time       `db:"created_at"            json:"created_at"`
+	UpdatedAt           time.Time       `db:"updated_at"            json:"updated_at"`
 }
 
 // AvailableBalance returns balance minus hold.
@@ -43,20 +43,20 @@ func (w *Wallet) AvailableBalance() decimal.Decimal {
 
 // Transaction records every balance change.
 type Transaction struct {
-	ID            uuid.UUID       `db:"id"`
-	TxnNumber     string          `db:"txn_number"`
-	WalletID      uuid.UUID       `db:"wallet_id"`
-	UserID        uuid.UUID       `db:"user_id"`
-	Type          string          `db:"type"`
-	Amount        decimal.Decimal `db:"amount"`
-	BalanceBefore decimal.Decimal `db:"balance_before"`
-	BalanceAfter  decimal.Decimal `db:"balance_after"`
-	ReferenceType string          `db:"reference_type"`
-	ReferenceID   *uuid.UUID      `db:"reference_id"`
-	Description   string          `db:"description"`
-	Metadata      map[string]any  `db:"-"`
-	RequestID     *uuid.UUID      `db:"request_id"`
-	CreatedAt     time.Time       `db:"created_at"`
+	ID            uuid.UUID       `db:"id"             json:"id"`
+	TxnNumber     string          `db:"txn_number"     json:"txn_number"`
+	WalletID      uuid.UUID       `db:"wallet_id"      json:"wallet_id"`
+	UserID        uuid.UUID       `db:"user_id"        json:"user_id"`
+	Type          string          `db:"type"           json:"type"`
+	Amount        decimal.Decimal `db:"amount"         json:"amount"`
+	BalanceBefore decimal.Decimal `db:"balance_before" json:"balance_before"`
+	BalanceAfter  decimal.Decimal `db:"balance_after"  json:"balance_after"`
+	ReferenceType string          `db:"reference_type" json:"reference_type"`
+	ReferenceID   *uuid.UUID      `db:"reference_id"   json:"reference_id,omitempty"`
+	Description   string          `db:"description"    json:"description"`
+	Metadata      map[string]any  `db:"metadata"       json:"metadata,omitempty"`
+	RequestID     *uuid.UUID      `db:"request_id"     json:"request_id,omitempty"`
+	CreatedAt     time.Time       `db:"created_at"     json:"created_at"`
 }
 
 // Payment status constants.
@@ -70,31 +70,31 @@ const (
 
 // Payment represents a deposit via external gateway.
 type Payment struct {
-	ID              uuid.UUID       `db:"id"`
-	PaymentNumber   string          `db:"payment_number"`
-	UserID          uuid.UUID       `db:"user_id"`
-	WalletID        uuid.UUID       `db:"wallet_id"`
-	Gateway         string          `db:"gateway"`
-	GatewayTxnID    string          `db:"gateway_txn_id"`
-	Amount          decimal.Decimal `db:"amount"`
-	Currency        string          `db:"currency"`
-	Status          string          `db:"status"`
-	CompletedAt     *time.Time      `db:"completed_at"`
-	CreatedAt       time.Time       `db:"created_at"`
-	UpdatedAt       time.Time       `db:"updated_at"`
+	ID           uuid.UUID       `db:"id"              json:"id"`
+	PaymentNumber string          `db:"payment_number"  json:"payment_number"`
+	UserID       uuid.UUID       `db:"user_id"         json:"user_id"`
+	WalletID     uuid.UUID       `db:"wallet_id"       json:"wallet_id"`
+	Gateway      string          `db:"gateway"         json:"gateway"`
+	GatewayTxnID string          `db:"gateway_txn_id"  json:"gateway_txn_id"`
+	Amount       decimal.Decimal `db:"amount"          json:"amount"`
+	Currency     string          `db:"currency"        json:"currency"`
+	Status       string          `db:"status"          json:"status"`
+	CompletedAt  *time.Time      `db:"completed_at"    json:"completed_at,omitempty"`
+	CreatedAt    time.Time       `db:"created_at"      json:"created_at"`
+	UpdatedAt    time.Time       `db:"updated_at"      json:"updated_at"`
 }
 
 // PricingRule defines a markup pricing rule.
 type PricingRule struct {
-	ID          uuid.UUID       `db:"id"`
-	ResellerID  *uuid.UUID      `db:"reseller_id"`
-	ProductType string          `db:"product_type"`
-	ProductID   *uuid.UUID      `db:"product_id"`
-	MarkupType  string          `db:"markup_type"` // percentage|fixed
-	MarkupValue decimal.Decimal `db:"markup_value"`
-	MinPrice    *decimal.Decimal `db:"min_price"`
-	IsActive    bool            `db:"is_active"`
-	CreatedAt   time.Time       `db:"created_at"`
+	ID          uuid.UUID        `db:"id"           json:"id"`
+	ResellerID  *uuid.UUID       `db:"reseller_id"  json:"reseller_id,omitempty"`
+	ProductType string           `db:"product_type" json:"product_type"`
+	ProductID   *uuid.UUID       `db:"product_id"   json:"product_id,omitempty"`
+	MarkupType  string           `db:"markup_type"  json:"markup_type"`
+	MarkupValue decimal.Decimal  `db:"markup_value" json:"markup_value"`
+	MinPrice    *decimal.Decimal `db:"min_price"    json:"min_price,omitempty"`
+	IsActive    bool             `db:"is_active"    json:"is_active"`
+	CreatedAt   time.Time        `db:"created_at"   json:"created_at"`
 }
 
 // ─── Repository Interfaces ────────────────────────────────────────────────────

@@ -8,6 +8,43 @@ All notable changes to Cloudmini Reseller Platform are documented here.
 
 ---
 
+## [0.9.0] — 2026-03-13
+
+### Added — Admin Manual Top-Up
+- **`TopUpModal` (frontend)** — Modal cho admin nạp tiền thủ công cho user: amount input (raw digits, `inputMode="numeric"`, preview format dưới), description field, gold notice box ghi rõ "admin adjustment — không tính doanh thu"
+- **Wallet button** (gold `Wallet` icon) trong Actions column của `/admin/users` table
+- **`adminAPI.adminAdjustBalance()`** — Frontend gọi `POST /api/v1/admin/billing/adjustment`
+- **`POST /api/v1/admin/billing/adjustment`** (`AdminAdjustBalance`) — Backend handler trong billing-service; dùng `reference_type="adjustment"` để tách biệt khỏi bank revenue pipeline
+
+### Added — Admin Users Table Enhancements
+- **Balance column**: hiển thị `formatVND(balance)` gold weight per user; loading state `…`; no-wallet state `—`
+- **Services column**: proxy (🌐 Globe icon) + vps (🖥 Server icon) counts; combined badge; per-row React Query fetch
+- **Subtle row hover**: `background: rgba(255,255,255,.03)` — Hetzner-style minimal hover
+
+### Added — Billing Service Internal Endpoints (service-to-service)
+- `POST /internal/billing/hold` — Hold funds for proxy/VPS orders
+- `POST /internal/billing/confirm-hold` — Confirm hold after successful provisioning
+- `POST /internal/billing/release-hold` — Release hold if order fails
+- `POST /internal/billing/calculate-price` — Pricing engine with reseller markup
+
+### Added — New Admin API Methods (frontend `api.ts`)
+- `getUserWallet(userId)` — `GET /api/v1/admin/billing/wallet?user_id=`
+- `getUserProxyOrders(userId)` — `GET /api/v1/admin/proxy/user-orders?user_id=`
+- `getUserVPSInstances(userId)` — `GET /api/v1/admin/vps/user-instances?user_id=`
+
+### Added — New Admin Endpoints (backend)
+- `GET /api/v1/admin/billing/wallet?user_id=xxx` — billing-service
+- `GET /api/v1/admin/proxy/user-orders?user_id=xxx` — proxy-service
+- `GET /api/v1/admin/vps/user-instances?user_id=xxx` — vps-service
+
+### Fixed — Billing Service
+- **`domain/entity.go`** — Thêm `json:` tags vào `Wallet`, `Transaction`, `Payment`, `PricingRule` structs. Trước đó Go serialize thành PascalCase (`Balance`, `HoldAmount`) nhưng frontend đọc lowercase → balance luôn hiển thị 0
+- **`Metadata` field** — Đổi `db:"-"` → `db:"metadata"` để `sqlx` scan được `jsonb` column; sửa lỗi `missing destination name metadata` khi `ListTransactions`
+- **`Credit()`** — Auto-create wallet nếu user chưa có (`ErrWalletNotFound`); trước đó admin top-up user mới = "wallet not found" error
+- **React Query** — `staleTime: 0` + `refetchType: 'all'` cho wallet query sau top-up để force refetch kể cả errored queries
+
+---
+
 ## [0.8.0] — 2026-03-07
 
 ### Added — Audit Logging System

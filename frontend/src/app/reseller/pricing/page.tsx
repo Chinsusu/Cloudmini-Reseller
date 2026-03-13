@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { resellerAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { useToast } from '@/components/ui/Toast'
+import { formatVND } from '@/lib/format'
 import { Tag, Save, Globe, Server } from 'lucide-react'
 
 type PriceRow = {
@@ -111,18 +112,18 @@ export default function ResellerPricingPage() {
                                                     {row.product_name || `Product ${row.id.slice(0, 6)}`}
                                                 </p>
                                             </td>
-                                            <td>
-                                                <span className="badge badge-info" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+                                             <td>
+                                                <span className="badge badge-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
                                                     {row.proxy_type === 'datacenter' ? <Server size={10} /> : <Globe size={10} />}
                                                     {row.proxy_type ?? '—'}
                                                 </span>
-                                            </td>
+                                             </td>
                                             <td style={{ color: 'var(--text-muted)', fontSize: '.875rem' }}>
                                                 {row.location ?? '—'}
                                             </td>
                                             <td>
                                                 <span style={{ fontWeight: 500, color: 'var(--error)', fontSize: '.875rem' }}>
-                                                    ${parseFloat(row.floor_price || '0').toFixed(2)}
+                                                    {formatVND(row.floor_price)}
                                                 </span>
                                                 <span style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginLeft: '.3rem' }}>min</span>
                                             </td>
@@ -144,7 +145,7 @@ export default function ResellerPricingPage() {
                                                         onClick={() => startEdit(row.id, row.sell_price)}
                                                         title="Click to edit"
                                                     >
-                                                        ${parseFloat(row.sell_price || '0').toFixed(2)}
+                                                        {formatVND(row.sell_price)}
                                                     </span>
                                                 )}
                                             </td>

@@ -60,36 +60,52 @@ export default function AdminPage() {
 
             {/* Stats */}
             <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#7367F0,#9e95f5)' }}><Users size={22} /></div>
-                    <div>
-                        <p className="stat-label">Total Users</p>
-                        <p className="stat-value">{totalUsers}</p>
-                        <p className="stat-sub">All registered accounts</p>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--dc-gold)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(230,168,23,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <Users size={18} color="var(--dc-gold)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Total Users</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-heading)', lineHeight: 1.2 }}>{totalUsers}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>All registered accounts</p>
+                        </div>
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#28C76F,#48DA89)' }}><ShieldCheck size={22} /></div>
-                    <div>
-                        <p className="stat-label">Resellers</p>
-                        <p className="stat-value">{meta.total ?? 0}</p>
-                        <p className="stat-sub">Registered resellers</p>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--success)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(40,199,111,.12)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <ShieldCheck size={18} color="var(--success)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Resellers</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-heading)', lineHeight: 1.2 }}>{meta.total ?? 0}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Registered resellers</p>
+                        </div>
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#00CFE8,#1EDEC5)' }}><Activity size={22} /></div>
-                    <div>
-                        <p className="stat-label">Platform Status</p>
-                        <p className="stat-value" style={{ fontSize: '1.2rem', color: 'var(--success)' }}>Operational</p>
-                        <p className="stat-sub">All services running</p>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--info)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(0,207,232,.1)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <Activity size={18} color="var(--info)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Platform Status</p>
+                            <p style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--success)', lineHeight: 1.2 }}>Operational</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>All services running</p>
+                        </div>
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#FF9F43,#FFB976)' }}><AlertCircle size={22} /></div>
-                    <div>
-                        <p className="stat-label">Pending Approval</p>
-                        <p className="stat-value">{items.filter((r: any) => r.status === 'pending').length}</p>
-                        <p className="stat-sub">Awaiting review</p>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--warning)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,159,67,.12)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <AlertCircle size={18} color="var(--warning)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Pending Approval</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--warning)', lineHeight: 1.2 }}>{items.filter((r: any) => r.status === 'pending').length}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Awaiting review</p>
+                        </div>
                     </div>
                 </div>
             </div>

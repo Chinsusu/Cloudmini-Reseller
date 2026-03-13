@@ -6,6 +6,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { formatVND } from '@/lib/format'
 import {
     Server, Play, Square, RotateCcw, Terminal, Trash2,
     Plus, X, Cpu, MemoryStick, HardDrive, RefreshCw, Activity
@@ -72,10 +73,12 @@ function DeployModal({ onClose }: { onClose: () => void }) {
                             {plans.map((plan: any) => (
                                 <div key={plan.id} onClick={() => setSelectedPlan(plan)}
                                     style={{
-                                        border: `2px solid ${selectedPlan?.id === plan.id ? 'var(--primary)' : 'var(--border-light)'}`,
+                                        border: '1px solid',
+                                        borderColor: selectedPlan?.id === plan.id ? 'var(--dc-gold)' : 'var(--border)',
                                         borderRadius: 10, padding: '1rem', cursor: 'pointer',
-                                        background: selectedPlan?.id === plan.id ? 'var(--primary-light)' : 'var(--surface)',
+                                        background: selectedPlan?.id === plan.id ? 'rgba(230,168,23,.07)' : 'var(--surface)',
                                         transition: 'all .15s',
+                                        boxShadow: selectedPlan?.id === plan.id ? 'var(--shadow)' : 'var(--shadow-sm)',
                                     }}>
                                     <div style={{ fontWeight: 700, marginBottom: '.5rem' }}>{plan.name}</div>
                                     <div style={{ fontSize: '.82rem', color: 'var(--text)', display: 'flex', flexDirection: 'column', gap: '.2rem', marginBottom: '.6rem' }}>
@@ -83,8 +86,8 @@ function DeployModal({ onClose }: { onClose: () => void }) {
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem' }}><MemoryStick size={12} />{plan.ram_mb / 1024} GB RAM</span>
                                         <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem' }}><HardDrive size={12} />{plan.disk_gb} GB SSD</span>
                                     </div>
-                                    <div style={{ fontWeight: 800, color: 'var(--primary)' }}>
-                                        ${parseFloat(plan.monthly_rate ?? 0).toFixed(2)}<span style={{ fontWeight: 400, fontSize: '.78rem', color: 'var(--text-muted)' }}>/mo</span>
+                                    <div style={{ fontWeight: 800, color: selectedPlan?.id === plan.id ? 'var(--dc-gold)' : 'var(--text-heading)' }}>
+                                        {formatVND(plan.monthly_rate)}<span style={{ fontWeight: 400, fontSize: '.78rem', color: 'var(--text-muted)' }}>/tháng</span>
                                     </div>
                                 </div>
                             ))}
@@ -102,11 +105,11 @@ function DeployModal({ onClose }: { onClose: () => void }) {
                                     <small style={{ color: 'var(--error)' }}>Lowercase letters, numbers, hyphens only (3-63 chars)</small>
                                 )}
                             </div>
-                            <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '.8rem 1rem', marginBottom: '1rem', fontSize: '.85rem' }}>
-                                <strong>{selectedPlan.name}</strong> · {selectedPlan.cpu_cores} vCPU · {selectedPlan.ram_mb / 1024}GB RAM · {selectedPlan.disk_gb}GB SSD<br />
-                                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>
-                                    ${parseFloat(selectedPlan.monthly_rate ?? 0).toFixed(2)}/mo
-                                    &nbsp;(${parseFloat(selectedPlan.hourly_rate ?? 0).toFixed(4)}/hr)
+                            <div style={{ background: 'var(--surface-raised)', borderRadius: 8, padding: '.8rem 1rem', marginBottom: '1rem', fontSize: '.85rem', border: '1px solid var(--border)' }}>
+                                <strong style={{ color: 'var(--text-heading)' }}>{selectedPlan.name}</strong> · {selectedPlan.cpu_cores} vCPU · {selectedPlan.ram_mb / 1024}GB RAM · {selectedPlan.disk_gb}GB SSD<br />
+                                <span style={{ color: 'var(--dc-gold)', fontWeight: 700 }}>
+                                    {formatVND(selectedPlan.monthly_rate)}/tháng
+                                    &nbsp;({formatVND(selectedPlan.hourly_rate)}/giờ)
                                 </span>
                             </div>
                             <button className="btn-primary" onClick={handleDeploy}
@@ -160,7 +163,7 @@ export default function VPSPage() {
                     <p className="page-subtitle">{meta.total ?? 0} instances · auto-refreshes every 10s</p>
                 </div>
                 <div style={{ display: 'flex', gap: '.6rem' }}>
-                    <button className="btn-secondary" onClick={() => refetch()}><RefreshCw size={14} /> Refresh</button>
+                    <button className="topbar-icon-btn" onClick={() => refetch()} title="Refresh"><RefreshCw size={15} /></button>
                     <button className="btn-primary" onClick={() => setShowModal(true)}><Plus size={14} /> Deploy VPS</button>
                 </div>
             </div>
@@ -197,8 +200,9 @@ export default function VPSPage() {
                                             <td style={{ fontSize: '.85rem' }}>{inst.plan_id ?? '—'}</td>
                                             <td><code style={{ fontSize: '.82rem' }}>{inst.ip_address ?? 'pending...'}</code></td>
                                             <td>
-                                                <span className={`badge badge-${STATUS_COLOR[inst.status] ?? 'secondary'}`}>
-                                                    <Activity size={10} style={{ marginRight: 3 }} />{inst.status}
+                                                <span className={`badge badge-${STATUS_COLOR[inst.status] ?? 'secondary'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem' }}>
+                                                    {inst.status === 'running' && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', display: 'inline-block', flexShrink: 0 }} className="pulse" />}
+                                                    {inst.status}
                                                 </span>
                                             </td>
                                             <td>

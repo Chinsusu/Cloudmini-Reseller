@@ -23,8 +23,8 @@ export const useAuthStore = create<AuthState>()(
             user: null,
             isAuthenticated: false,
             setUser: (user, token, refresh) => {
-                Cookies.set('pvp_token', token, { secure: true, sameSite: 'strict', expires: 1 })
-                Cookies.set('pvp_refresh', refresh, { secure: true, sameSite: 'strict', expires: 30 })
+                Cookies.set('pvp_token', token, { sameSite: 'lax', expires: 1 })
+                Cookies.set('pvp_refresh', refresh, { sameSite: 'lax', expires: 30 })
                 set({ user, isAuthenticated: true })
             },
             clearAuth: () => {

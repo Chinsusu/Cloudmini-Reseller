@@ -5,7 +5,8 @@ import { resellerAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
-import { Users, UserPlus, DollarSign } from 'lucide-react'
+import { formatVND } from '@/lib/format'
+import { Users, UserPlus } from 'lucide-react'
 
 export default function ResellerAccountsPage() {
     const [page, setPage] = useState(1)
@@ -58,7 +59,7 @@ export default function ResellerAccountsPage() {
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Credit Limit ($)</label>
+                        <label>Hạn mức tín dụng (VND)</label>
                         <input
                             className="input"
                             type="number"
@@ -109,7 +110,7 @@ export default function ResellerAccountsPage() {
                                             <td><code className="font-mono" style={{ fontSize: '.8rem' }}>{s.user_id}</code></td>
                                             <td>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontWeight: 600 }}>
-                                                    <DollarSign size={13} />{parseFloat(s.credit_limit || '0').toFixed(2)}
+                                                    {formatVND(s.credit_limit)}
                                                 </span>
                                             </td>
                                             <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>

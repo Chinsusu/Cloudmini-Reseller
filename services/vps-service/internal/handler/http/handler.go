@@ -256,6 +256,27 @@ func (h *Handler) DeleteSnapshot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /api/v1/admin/vps/user-instances?user_id=xxx
+func (h *Handler) AdminGetUserInstances(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.URL.Query().Get("user_id")
+	if userIDStr == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "user_id is required")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid user_id")
+		return
+	}
+	p := pagination.Parse(r)
+	insts, total, err := h.instanceUC.ListInstances(r.Context(), userID, 0, p.Limit)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSONWithMeta(w, http.StatusOK, insts, pagination.NewMeta(p, total))
+}
+
 // NewRouter builds the chi router for vps-service.
 func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger) http.Handler {
 	r := chi.NewRouter()
@@ -294,6 +315,7 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Get("/plans", h.AdminListPlans)
 				r.Post("/plans", h.AdminCreatePlan)
 				r.Put("/plans/{id}/toggle", h.AdminTogglePlan)
+				r.Get("/user-instances", h.AdminGetUserInstances)
 			})
 		})
 	})

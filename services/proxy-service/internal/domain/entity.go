@@ -4,6 +4,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,40 +13,42 @@ import (
 
 // Order status constants.
 const (
-	OrderPending    = "pending"
-	OrderProcessing = "processing"
-	OrderActive     = "active"
-	OrderExpired    = "expired"
-	OrderCancelled  = "cancelled"
-	OrderFailed     = "failed"
-	OrderRefunded   = "refunded"
+	OrderPending     = "pending"     // payment not yet confirmed
+	OrderProcessing  = "processing"  // paid, waiting for async provider activation
+	OrderActive      = "active"      // proxy is live and credentials are available
+	OrderExpired     = "expired"     // proxy lifetime ended
+	OrderCancelled   = "cancelled"   // cancelled by user or admin
+	OrderFailed      = "failed"      // provider purchase failed
+	OrderRefunded    = "refunded"    // refunded to wallet
 )
 
 // Provider entity.
 type Provider struct {
-	ID          uuid.UUID      `db:"id"`
-	Name        string         `db:"name"`
-	DisplayName string         `db:"display_name"`
-	AdapterType string         `db:"adapter_type"`
-	Config      map[string]any `db:"-"` // JSON from db — stored encrypted
-	IsActive    bool           `db:"is_active"`
-	Priority    int            `db:"priority"`
-	CreatedAt   time.Time      `db:"created_at"`
+	ID          uuid.UUID       `db:"id"          json:"id"`
+	Name        string          `db:"name"         json:"name"`
+	DisplayName string          `db:"display_name" json:"display_name"`
+	AdapterType string          `db:"adapter_type" json:"adapter_type"`
+	Config      json.RawMessage `db:"config"       json:"-"` // JSONB — never expose config to frontend
+	IsActive    bool            `db:"is_active"    json:"is_active"`
+	Priority    int             `db:"priority"     json:"priority"`
+	CreatedAt   time.Time       `db:"created_at"   json:"created_at"`
+	UpdatedAt   time.Time       `db:"updated_at"   json:"updated_at"`
 }
 
 // Product entity.
 type Product struct {
-	ID           uuid.UUID       `db:"id"`
-	ProviderID   uuid.UUID       `db:"provider_id"`
-	Name         string          `db:"name"`
-	ProxyType    string          `db:"proxy_type"`
-	Protocol     string          `db:"protocol"`
-	Location     string          `db:"location"`
-	DurationDays *int            `db:"duration_days"`
-	BandwidthGB  *decimal.Decimal `db:"bandwidth_gb"`
-	BaseCost     decimal.Decimal `db:"base_cost"`
-	IsActive     bool            `db:"is_active"`
-	CreatedAt    time.Time       `db:"created_at"`
+	ID           uuid.UUID        `db:"id"            json:"id"`
+	ProviderID   uuid.UUID        `db:"provider_id"   json:"provider_id"`
+	Name         string           `db:"name"          json:"name"`
+	ProxyType    string           `db:"proxy_type"    json:"proxy_type"`
+	Protocol     string           `db:"protocol"      json:"protocol"`
+	Location     string           `db:"location"      json:"location"`
+	DurationDays *int             `db:"duration_days" json:"duration_days"`
+	BandwidthGB  *decimal.Decimal `db:"bandwidth_gb"  json:"bandwidth_gb"`
+	BaseCost     decimal.Decimal  `db:"base_cost"     json:"base_cost"`
+	IsActive     bool             `db:"is_active"     json:"is_active"`
+	Metadata     json.RawMessage  `db:"metadata"      json:"metadata,omitempty"`
+	CreatedAt    time.Time        `db:"created_at"    json:"created_at"`
 }
 
 // Order entity.
@@ -84,7 +87,10 @@ type IProviderRepository interface {
 type IProductRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Product, error)
 	List(ctx context.Context, proxyType, protocol, location string, offset, limit int) ([]*Product, int, error)
+	AdminList(ctx context.Context, offset, limit int) ([]*Product, int, error) // all products, no is_active filter
 	Create(ctx context.Context, p *Product) error
+	Update(ctx context.Context, p *Product) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	ToggleActive(ctx context.Context, id uuid.UUID) error
 }
 
@@ -93,6 +99,9 @@ type IOrderRepository interface {
 	Create(ctx context.Context, o *Order) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Order, error)
 	GetByIdempotencyKey(ctx context.Context, key string) (*Order, error)
+	// GetByProviderOrderID finds an order using the provider's order reference ID.
+	// Used by webhook handlers to locate the Cloudmini order after async activation.
+	GetByProviderOrderID(ctx context.Context, providerOrderID string) (*Order, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	UpdateAfterPurchase(ctx context.Context, id uuid.UUID, providerOrderID, credentials string, activatedAt, expiresAt *time.Time) error
 	ListByUser(ctx context.Context, userID uuid.UUID, offset, limit int) ([]*Order, int, error)

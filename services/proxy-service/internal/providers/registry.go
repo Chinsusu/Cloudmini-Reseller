@@ -6,21 +6,39 @@
 // In main.go, concrete adapters (sandbox, vendor, etc.) are registered.
 package providers
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ─── Provider errors ──────────────────────────────────────────────────────────
+
+var (
+	// ErrProviderUnavailable signals that the provider API is unreachable or returned a fatal error.
+	ErrProviderUnavailable = errors.New("provider unavailable")
+	// ErrInvalidConfig signals that the purchase request contained invalid configuration.
+	ErrInvalidConfig = errors.New("invalid provider configuration")
+	// ErrProviderBalance signals that the provider account has insufficient funds.
+	ErrProviderBalance = errors.New("provider account balance insufficient")
+)
 
 // PurchaseRequest is the request to purchase proxies from a provider.
 type PurchaseRequest struct {
-	ProductID string // provider's product/plan ID
-	Quantity  int    // number of proxy units
-	OrderID   string // our internal order ID for reference
-	Country   string // optional country filter
-	Protocol  string // http|socks5|etc
+	ProductID string            // provider's product/plan ID
+	Quantity  int               // number of proxy units
+	OrderID   string            // our internal order ID for reference
+	Country   string            // optional country filter
+	Protocol  string            // http|socks5|etc
+	Metadata  map[string]string // provider-specific parameters
 }
 
 // PurchaseResult is the result returned by the provider.
+// Credentials may be nil for async providers (e.g. Proxy-Cheap):
+// in that case the order status is set to "processing" and credentials
+// are populated later via webhook or polling.
 type PurchaseResult struct {
-	ProviderOrderID string            // provider's reference ID
-	Credentials     []ProxyCredential // list of proxies purchased
+	ProviderOrderID string           // provider's reference ID
+	Credentials     []ProxyCredential // list of proxies purchased; nil if async
 }
 
 // ProxyCredential represents a single proxy credential.
@@ -36,12 +54,14 @@ type ProxyCredential struct {
 // IProxyProvider is the interface every proxy provider adapter must implement.
 type IProxyProvider interface {
 	// Purchase buys proxy units from the provider.
+	// Returns PurchaseResult.Credentials == nil for async providers.
 	Purchase(ctx context.Context, req PurchaseRequest) (*PurchaseResult, error)
 	// Cancel cancels/releases a previously purchased order.
 	Cancel(ctx context.Context, providerOrderID string) error
 	// CheckStatus checks the status of a provider order.
 	CheckStatus(ctx context.Context, providerOrderID string) (string, error)
 }
+
 
 // Registry maps provider IDs to IProxyProvider implementations.
 // Thread-safe for reads after initial setup (register all providers at startup).

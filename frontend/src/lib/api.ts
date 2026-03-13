@@ -31,10 +31,10 @@ api.interceptors.response.use(
                         .post('/api/v1/auth/refresh', { refresh_token: refresh })
                         .then((r) => {
                             const token = r.data.data.access_token
-                            Cookies.set('pvp_token', token, { secure: true, sameSite: 'strict' })
+                            Cookies.set('pvp_token', token, { sameSite: 'lax', expires: 1 })
                             // Update refresh token if rotated
                             if (r.data.data.refresh_token) {
-                                Cookies.set('pvp_refresh', r.data.data.refresh_token, { secure: true, sameSite: 'strict' })
+                                Cookies.set('pvp_refresh', r.data.data.refresh_token, { sameSite: 'lax', expires: 30 })
                             }
                             return token
                         })
@@ -61,6 +61,7 @@ export const authAPI = {
     register: (email: string, password: string, fullName: string) =>
         api.post('/v1/auth/register', { email, password, full_name: fullName }),
     logout: () => api.post('/v1/auth/logout'),
+    forgotPassword: (email: string) => api.post('/v1/auth/forgot-password', { email }),
     me: () => api.get('/v1/users/me'),
     updateMe: (data: { full_name: string; phone: string }) => api.put('/v1/users/me', data),
     changePassword: (data: { old_password: string; new_password: string }) =>
@@ -84,11 +85,13 @@ export const proxyAPI = {
     listProducts: (proxyType = '', protocol = '', location = '') =>
         api.get(`/v1/proxy/products?proxy_type=${proxyType}&protocol=${protocol}&location=${location}`),
     listOrders: (page = 1) => api.get(`/v1/proxy/orders?page=${page}&limit=20`),
-    createOrder: (productId: string, qty: number) =>
-        api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, idempotency_key: crypto.randomUUID() }),
+    createOrder: (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number }) =>
+        api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, metadata: meta ?? {}, idempotency_key: crypto.randomUUID() }),
     getOrder: (id: string) => api.get(`/v1/proxy/orders/${id}`),
     cancelOrder: (id: string) => api.delete(`/v1/proxy/orders/${id}`),
     getCredentials: (id: string) => api.get(`/v1/proxy/orders/${id}/credentials`),
+    serviceOptions: (serviceId: string, planId?: string) =>
+        api.get(`/v1/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),
 }
 
 // ─── VPS ───────────────────────────────────────────────────────────────────────
@@ -126,11 +129,24 @@ export const adminAPI = {
     // Proxy product management
     listProxyProducts: (page = 1) => api.get(`/v1/admin/proxy/products?page=${page}&limit=20`),
     createProxyProduct: (data: Record<string, any>) => api.post('/v1/admin/proxy/products', data),
+    updateProxyProduct: (id: string, data: Record<string, any>) => api.put(`/v1/admin/proxy/products/${id}`, data),
+    deleteProxyProduct: (id: string) => api.delete(`/v1/admin/proxy/products/${id}`),
     toggleProxyProduct: (id: string) => api.put(`/v1/admin/proxy/products/${id}/toggle`),
+    // Proxy provider management
+    listProxyProviders: () => api.get('/v1/admin/proxy/providers'),
+    getProxyServiceOptions: (serviceId: string, planId?: string) =>
+        api.get(`/v1/admin/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),
     // VPS plan management
     listVPSPlans: (page = 1) => api.get(`/v1/admin/vps/plans?page=${page}&limit=20`),
     createVPSPlan: (data: Record<string, any>) => api.post('/v1/admin/vps/plans', data),
     toggleVPSPlan: (id: string) => api.put(`/v1/admin/vps/plans/${id}/toggle`),
+    // Per-user admin queries
+    getUserWallet: (userId: string) => api.get(`/v1/admin/billing/wallet?user_id=${userId}`),
+    getUserProxyOrders: (userId: string) => api.get(`/v1/admin/proxy/user-orders?user_id=${userId}&limit=1`),
+    getUserVPSInstances: (userId: string) => api.get(`/v1/admin/vps/user-instances?user_id=${userId}&limit=1`),
+    // Admin manual balance adjustment (reference_type="adjustment" — not counted as revenue)
+    adminAdjustBalance: (userId: string, amount: number, description: string) =>
+        api.post('/v1/admin/billing/adjustment', { user_id: userId, amount, description }),
 }
 
 // ─── Reseller ──────────────────────────────────────────────────────────────────

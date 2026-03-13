@@ -5,6 +5,7 @@ import { walletAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
+import { formatVND } from '@/lib/format'
 import { Wallet, TrendingUp, TrendingDown, Lock, CreditCard, ArrowUpRight } from 'lucide-react'
 
 export default function WalletPage() {
@@ -59,34 +60,43 @@ export default function WalletPage() {
 
             {/* Balance Cards */}
             <div className="stats-grid" style={{ marginBottom: '1.75rem' }}>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#7367F0,#9e95f5)' }}>
-                        <Wallet size={22} />
-                    </div>
-                    <div>
-                        <p className="stat-label">Total Balance</p>
-                        <p className="stat-value">${balance.toFixed(2)}</p>
-                        <p className="stat-sub">Gross balance</p>
-                    </div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#28C76F,#48DA89)' }}>
-                        <TrendingUp size={22} />
-                    </div>
-                    <div>
-                        <p className="stat-label">Available</p>
-                        <p className="stat-value" style={{ color: 'var(--success)' }}>${available.toFixed(2)}</p>
-                        <p className="stat-sub">Ready to spend</p>
+                {/* Balance */}
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--dc-gold)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(230,168,23,.15)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <Wallet size={18} color="var(--dc-gold)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Tổng số dư</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--dc-gold)', lineHeight: 1.2 }}>{formatVND(balance)}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Số dư gộp</p>
+                        </div>
                     </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'linear-gradient(135deg,#FF9F43,#FFB976)' }}>
-                        <Lock size={22} />
+                {/* Available */}
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--success)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(40,199,111,.12)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <TrendingUp size={18} color="var(--success)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Khả dụng</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--success)', lineHeight: 1.2 }}>{formatVND(available)}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Sẵn sàng chi tiêu</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="stat-label">On Hold</p>
-                        <p className="stat-value" style={{ color: 'var(--warning)' }}>${hold.toFixed(2)}</p>
-                        <p className="stat-sub">Reserved for active orders</p>
+                </div>
+                {/* On Hold */}
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderTop: '3px solid var(--warning)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', padding: '1.25rem 1.5rem', boxShadow: 'var(--shadow-sm)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,159,67,.12)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                            <Lock size={18} color="var(--warning)" />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Tạm giữ</p>
+                            <p style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--warning)', lineHeight: 1.2 }}>{formatVND(hold)}</p>
+                            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>Dành cho đơn hàng</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -96,7 +106,7 @@ export default function WalletPage() {
                 <div className="card-header"><ArrowUpRight size={17} /> Top Up Balance</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '.75rem', alignItems: 'flex-end' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>Amount (USD)</label>
+                        <label>Số tiền (VND)</label>
                         <input
                             className="input"
                             type="number"
@@ -131,7 +141,7 @@ export default function WalletPage() {
                     </button>
                 </div>
                 <p style={{ fontSize: '.8rem', color: 'var(--text-muted)', marginTop: '.75rem' }}>
-                    Minimum top-up: $5.00. Balance is updated upon payment confirmation.
+                    Nạp tối thiểu: 50.000đ. Số dư sẽ cập nhật sau khi xác nhận thanh toán.
                 </p>
             </div>
 
@@ -180,11 +190,11 @@ export default function WalletPage() {
                                                 <td style={{ textAlign: 'right', fontWeight: 600, color: credit ? 'var(--success)' : 'var(--error)' }}>
                                                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '.2rem' }}>
                                                         {credit ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                                                        {credit ? '+' : '-'}${parseFloat(tx.amount || '0').toFixed(2)}
+                                                        {credit ? '+' : '-'}{formatVND(tx.amount)}
                                                     </span>
                                                 </td>
                                                 <td style={{ fontSize: '.875rem', color: 'var(--text-muted)' }}>
-                                                    {tx.balance_after ? `$${parseFloat(tx.balance_after).toFixed(2)}` : '—'}
+                                                    {tx.balance_after ? formatVND(tx.balance_after) : '—'}
                                                 </td>
                                                 <td>
                                                     <span className="badge badge-success">{tx.status || 'completed'}</span>

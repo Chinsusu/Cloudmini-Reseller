@@ -118,9 +118,9 @@ export default function ResellerWebhooksPage() {
                                     border: '1px solid',
                                     cursor: 'pointer',
                                     transition: 'all .15s',
-                                    background: events.includes(evt) ? 'var(--primary)' : 'transparent',
-                                    color: events.includes(evt) ? 'white' : 'var(--text-muted)',
-                                    borderColor: events.includes(evt) ? 'var(--primary)' : 'var(--border-light)',
+                                    background: events.includes(evt) ? 'rgba(230,168,23,.15)' : 'transparent',
+                                    color: events.includes(evt) ? 'var(--dc-gold)' : 'var(--text-muted)',
+                                    borderColor: events.includes(evt) ? 'rgba(230,168,23,.5)' : 'var(--border-light)',
                                 }}
                             >
                                 {evt}

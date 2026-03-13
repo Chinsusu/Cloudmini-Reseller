@@ -4,6 +4,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -289,7 +290,24 @@ func (u *WalletUsecase) Credit(ctx context.Context, userID uuid.UUID, amount dec
 	err := u.txRunner.RunInTx(ctx, func(ctx context.Context) error {
 		w, err := u.walletRepo.GetByUserIDForUpdate(ctx, userID)
 		if err != nil {
-			return fmt.Errorf("Credit: get wallet: %w", err)
+			if !errors.Is(err, domain.ErrWalletNotFound) {
+				return fmt.Errorf("Credit: get wallet: %w", err)
+			}
+			// Auto-create wallet for users who haven't accessed billing yet.
+			newWallet := &domain.Wallet{
+				ID:                  uuid.New(),
+				UserID:              userID,
+				Balance:             decimal.Zero,
+				HoldAmount:          decimal.Zero,
+				Currency:            "USD",
+				LowBalanceThreshold: decimal.NewFromFloat(lowBalanceThreshold),
+				CreatedAt:           time.Now(),
+				UpdatedAt:           time.Now(),
+			}
+			if createErr := u.walletRepo.Create(ctx, newWallet); createErr != nil {
+				return fmt.Errorf("Credit: create wallet: %w", createErr)
+			}
+			w = newWallet
 		}
 
 		newBalance := w.Balance.Add(amount)

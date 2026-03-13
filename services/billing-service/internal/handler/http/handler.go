@@ -134,11 +134,24 @@ func (h *Handler) StripeWebhook(w http.ResponseWriter, r *http.Request) {
 
 // ─── Admin ─────────────────────────────────────────────────────────────────────
 
-func (h *Handler) AdminListWallets(w http.ResponseWriter, r *http.Request) {
-	p := pagination.Parse(r)
-	_ = p // pagination used when a proper ListWallets usecase is added
-	// Admin wallet listing — placeholder response until ListWallets usecase is implemented
-	apierror.RespondJSON(w, http.StatusOK, []any{})
+// GET /api/v1/admin/billing/wallet?user_id=xxx — returns a specific user's wallet.
+func (h *Handler) AdminGetUserWallet(w http.ResponseWriter, r *http.Request) {
+	userIDStr := r.URL.Query().Get("user_id")
+	if userIDStr == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "user_id is required")
+		return
+	}
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid user_id")
+		return
+	}
+	wallet, err := h.walletUC.GetBalance(r.Context(), userID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, wallet)
 }
 
 func (h *Handler) AdminAdjustBalance(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +187,101 @@ func (h *Handler) AdminAdjustBalance(w http.ResponseWriter, r *http.Request) {
 	apierror.RespondJSON(w, http.StatusOK, txn)
 }
 
+// ─── Internal (service-to-service, no JWT) ────────────────────────────────────
+
+func (h *Handler) InternalHold(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID        string          `json:"user_id"`
+		Amount        decimal.Decimal `json:"amount"`
+		ReferenceType string          `json:"reference_type"`
+		ReferenceID   string          `json:"reference_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	userID, _ := uuid.Parse(req.UserID)
+	refID, _ := uuid.Parse(req.ReferenceID)
+	_, err := h.walletUC.Hold(r.Context(), usecase.HoldRequest{
+		UserID:        userID,
+		Amount:        req.Amount,
+		ReferenceType: req.ReferenceType,
+		ReferenceID:   &refID,
+	})
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) InternalConfirmHold(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID        string          `json:"user_id"`
+		Amount        decimal.Decimal `json:"amount"`
+		ReferenceType string          `json:"reference_type"`
+		ReferenceID   string          `json:"reference_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	userID, _ := uuid.Parse(req.UserID)
+	refID, _ := uuid.Parse(req.ReferenceID)
+	_, err := h.walletUC.ConfirmHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) InternalReleaseHold(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		UserID        string          `json:"user_id"`
+		Amount        decimal.Decimal `json:"amount"`
+		ReferenceType string          `json:"reference_type"`
+		ReferenceID   string          `json:"reference_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	userID, _ := uuid.Parse(req.UserID)
+	refID, _ := uuid.Parse(req.ReferenceID)
+	_, err := h.walletUC.ReleaseHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) InternalCalculatePrice(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BaseCost    decimal.Decimal `json:"base_cost"`
+		ProductType string          `json:"product_type"`
+		ProductID   string          `json:"product_id"`
+		ResellerID  *string         `json:"reseller_id,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	productID, _ := uuid.Parse(req.ProductID)
+	var resellerID *uuid.UUID
+	if req.ResellerID != nil {
+		id, _ := uuid.Parse(*req.ResellerID)
+		resellerID = &id
+	}
+	price, err := h.pricingEng.CalculatePrice(r.Context(), req.BaseCost, req.ProductType, productID, resellerID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, map[string]any{"price": price})
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 // NewRouter returns the chi router for billing-service.
@@ -200,9 +308,17 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 
 		r.Route("/api/v1/admin/billing", func(r chi.Router) {
 			r.Use(middleware.RequireRole("admin", "super_admin"))
-			r.Get("/wallets", h.AdminListWallets)
+			r.Get("/wallet", h.AdminGetUserWallet)
 			r.Post("/adjustment", h.AdminAdjustBalance)
 		})
+	})
+
+	// Internal service-to-service routes (no JWT — internal network only)
+	r.Route("/internal/billing", func(r chi.Router) {
+		r.Post("/hold", h.InternalHold)
+		r.Post("/confirm-hold", h.InternalConfirmHold)
+		r.Post("/release-hold", h.InternalReleaseHold)
+		r.Post("/calculate-price", h.InternalCalculatePrice)
 	})
 
 	return r

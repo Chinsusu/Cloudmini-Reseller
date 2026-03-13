@@ -5,6 +5,7 @@ import { adminAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
+import { formatVND } from '@/lib/format'
 import { Server, Plus, X, ToggleLeft, ToggleRight, Cpu, MemoryStick, HardDrive } from 'lucide-react'
 
 function AddPlanModal({ onClose }: { onClose: () => void }) {
@@ -151,8 +152,8 @@ export default function AdminVPSPage() {
                                                     <HardDrive size={12} /> {p.disk_gb} GB
                                                 </span>
                                             </td>
-                                            <td><strong>${parseFloat(p.monthly_rate ?? 0).toFixed(2)}</strong></td>
-                                            <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>${parseFloat(p.hourly_rate ?? 0).toFixed(4)}</td>
+                                            <td><strong>{formatVND(p.monthly_rate)}</strong></td>
+                                            <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>{formatVND(p.hourly_rate)}</td>
                                             <td>
                                                 <button
                                                     className="action-btn"

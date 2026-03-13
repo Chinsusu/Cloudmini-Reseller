@@ -71,15 +71,15 @@ export default function ResellerAPIKeysPage() {
 
             {/* New key created banner */}
             {newKeyResult && (
-                <div className="alert alert-success" style={{ marginBottom: '1.5rem' }}>
-                    <p><strong>API Key created! Copy it now — it won't be shown again.</strong></p>
-                    <div className="key-display">
-                        <code>{newKeyResult}</code>
-                        <button className="action-btn purple" onClick={() => handleCopy(newKeyResult)} title="Copy">
+                <div style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '4px solid var(--dc-gold)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-sm)' }}>
+                    <p style={{ fontWeight: 700, color: 'var(--dc-gold)', marginBottom: '.5rem', fontSize: '.875rem' }}>API Key created! Copy it now — it won't be shown again.</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', background: 'var(--bg)', borderRadius: 8, padding: '.5rem .75rem', border: '1px solid var(--border)' }}>
+                        <code style={{ flex: 1, fontSize: '.78rem', fontFamily: 'monospace', wordBreak: 'break-all', color: 'var(--text-heading)' }}>{newKeyResult}</code>
+                        <button className="action-btn" style={{ color: 'var(--dc-gold)' }} onClick={() => handleCopy(newKeyResult)} title="Copy">
                             <Copy size={13} /> Copy
                         </button>
                     </div>
-                    <button className="btn-ghost" style={{ marginTop: '.5rem' }} onClick={() => setNewKeyResult(null)}>
+                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '.78rem', marginTop: '.5rem', padding: 0 }} onClick={() => setNewKeyResult(null)}>
                         Dismiss
                     </button>
                 </div>
@@ -140,7 +140,7 @@ export default function ResellerAPIKeysPage() {
                                         <td><code className="font-mono">{k.key_prefix}...</code></td>
                                         <td>
                                             {(k.scopes ?? []).map((s: string) => (
-                                                <span key={s} className="badge badge-info" style={{ marginRight: 4 }}>{s}</span>
+                                                <span key={s} className="badge badge-secondary" style={{ marginRight: 4 }}>{s}</span>
                                             ))}
                                         </td>
                                         <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>

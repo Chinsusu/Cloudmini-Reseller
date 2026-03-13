@@ -21,11 +21,11 @@ export default function AdminLogsPage() {
     const [appliedUser, setAppliedUser] = useState('')
 
     return (
-        <AppLayout>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <AppLayout breadcrumb={[{ label: 'Admin', href: '/admin' }, { label: 'Audit Logs' }]}>
+            <div className="page-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
                 <div>
-                    <h1 className="page-title" style={{ margin: 0 }}>Audit Logs</h1>
-                    <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--text-muted)' }}>System-wide activity trail</p>
+                    <h1 className="page-title">Audit Logs</h1>
+                    <p className="page-subtitle">System-wide activity trail</p>
                 </div>
 
                 {/* Filters */}
@@ -50,11 +50,11 @@ export default function AdminLogsPage() {
                             onChange={e => setFilterUser(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && setAppliedUser(filterUser)}
                         />
-                        <button className="btn btn-secondary" onClick={() => setAppliedUser(filterUser)}>
+                        <button className="btn-secondary" onClick={() => setAppliedUser(filterUser)}>
                             Filter
                         </button>
                         {appliedUser && (
-                            <button className="btn btn-secondary" onClick={() => { setFilterUser(''); setAppliedUser('') }}>
+                            <button className="btn-secondary" onClick={() => { setFilterUser(''); setAppliedUser('') }}>
                                 Clear
                             </button>
                         )}

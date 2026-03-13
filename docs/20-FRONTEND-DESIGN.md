@@ -1,6 +1,6 @@
 # Cloudmini — Tài liệu Thiết kế Frontend
 
-> Phiên bản: v0.6.x · Cập nhật: 2026-03-07
+> Phiên bản: v0.9.x · Cập nhật: 2026-03-13
 
 ---
 
@@ -9,408 +9,474 @@
 | Thuộc tính | Giá trị |
 |-----------|---------|
 | Framework | Next.js 14 App Router |
-| Font | Public Sans |
-| Primary color | `#7367F0` (purple) |
-| Layout | `<AppLayout>` (Sidebar + Topbar) |
+| Font | Public Sans (Google Fonts) |
 | State | Zustand (`useAuthStore`) + React Query |
 | Notifications | `useToast()` / `useConfirm()` |
 | Pagination | `<Pagination>` component |
+| Icons | `lucide-react` |
+
+---
+
+## Dark Theme — Hetzner-inspired
+
+> Tham khảo: Hetzner Console dark mode
+
+### Hierarchy màu sắc
+
+```
+┌─────────────────── BACKGROUND ───────────────────────┐  #111316  (tối nhất - canvas)
+│  ┌─── SIDEBAR / TOPBAR / CARD ─────────────────────┐ │  #1C1D21  (panel nổi trên bg)
+│  │  ┌── RAISED (modal, dropdown, hover) ─────────┐ │ │  #252629  (nổi nhất)
+│  │  └────────────────────────────────────────────┘ │ │
+│  └─────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────┘
+```
+
+### CSS Variables — Layout & Color
+
+| Variable | Hex | Dùng cho |
+|---|---|---|
+| `--bg` | `#111316` | Canvas background — tối nhất |
+| `--surface` | `#1C1D21` | Card, sidebar, topbar, panel |
+| `--surface-raised` | `#252629` | Modal, dropdown, hover state |
+| `--sidebar-bg` | `#1C1D21` | Sidebar (= surface) |
+| `--border` | `rgba(255,255,255,.09)` | Viền phân cách |
+| `--border-light` | `rgba(255,255,255,.05)` | Viền nhẹ hơn |
+| `--text` | `#ADADB8` | Body text |
+| `--text-heading` | `#E4E4E8` | Heading, số liệu quan trọng |
+| `--text-muted` | `rgba(255,255,255,.38)` | Placeholder, label, muted |
+| `--shadow-sm` | `0 2px 6px rgba(0,0,0,.45)` | Card shadow |
+| `--shadow` | `0 4px 18px rgba(0,0,0,.55)` | Elevated shadow |
+
+### CSS Variables — Brand & Accent
+
+| Variable | Hex | Dùng cho |
+|---|---|---|
+| `--dc-gold` | `#E6A817` | CTA chính, active nav, avatar, link |
+| `--dc-gold-dark` | `#C98F10` | Hover gold |
+| `--dc-gold-text` | `#1C1C1E` | Text trên nền gold |
+| `--primary` | `#7367F0` | Accent phụ (filter active, focus ring) |
+| `--success` | `#28C76F` | |
+| `--warning` | `#FF9F43` | |
+| `--error` | `#EA5455` | |
+| `--info` | `#00CFE8` | |
+
+> **Lưu ý:** `--success-light`, `--error-light`, v.v. là `rgba()` để phù hợp dark bg.
+
+---
+
+## Layout — AppLayout
+
+```
+┌──────────┬────────────────────────────────────┐
+│          │  Topbar (--surface, border-bottom)  │
+│ Sidebar  ├────────────────────────────────────┤
+│(260px)   │                                    │
+│(--sidebar│   .page-main (--bg, padding 2rem)  │
+│  -bg)    │                                    │
+└──────────┴────────────────────────────────────┘
+```
+
+- `.page-layout`: `display: flex; min-height: 100vh`
+- `.page-main`: `flex: 1; background: var(--bg); padding: 1.75rem 2rem`
+- Sidebar: `position: sticky; top: 0; height: 100vh; overflow-y: auto`
+
+---
+
+## Sidebar Navigation
+
+> File: `frontend/src/components/layout/Sidebar.tsx`
+> Xem thêm: `docs/pages/sidebar-navigation.md`
+
+### Style
+
+| Element | Style |
+|---|---|
+| Background | `var(--sidebar-bg)` = `#1C1D21` |
+| Logo icon | 34×34px, `bg: var(--dc-gold)`, radius 8px |
+| Logo text | `color: #fff`, weight 800 |
+| Section label | `.67rem`, uppercase, `color: rgba(white,.28)` |
+| Nav item | `color: rgba(white,.62)`, hover: `rgba(white,.07)` bg |
+| **Active item** | `bg: rgba(gold,.12)` + left border `3px var(--dc-gold)` + `color: var(--dc-gold)` |
+| User avatar | 34×34 circle, `bg: var(--dc-gold)` |
+| Logout hover | red `#ea5455` |
+
+### Menu theo Role
+
+```
+user:     MAIN(Dashboard) → SERVICES(Proxy Orders, VPS Instances) → ACCOUNT(Wallet, Profile)
+reseller: OVERVIEW(Dashboard) → MANAGEMENT(Sub-Accounts, Pricing) → DEVELOPER(API Keys, Webhooks)
+admin:    OVERVIEW(Dashboard) → MANAGEMENT(Users, Resellers, Proxy Products, Proxy Providers, VPS Plans, Audit Logs) → SERVICES(Proxy, VPS) → MY ACCOUNT(Wallet, Profile)
+```
 
 ---
 
 ## Auth Pages
 
-### `/login`
-**Mục đích:** Đăng nhập tài khoản
+> File: `docs/pages/auth-pages.md` (chi tiết đầy đủ)
 
-| Mục | Chi tiết |
-|-----|---------|
-| Inputs | Email, Password |
-| Submit | `POST /api/v1/auth/login` → nhận `access_token` + `refresh_token` |
-| Success | Redirect theo role: `admin` → `/admin`, `reseller` → `/reseller`, `user` → `/dashboard` |
-| Lưu trữ | Token lưu vào Zustand `useAuthStore` + localStorage |
+### Style chung
+
+```
+[BG: /public/datacenter-bg.jpg + rgba(0,0,0,.45) blur]
+
+      ┌────────────────────────┐
+      │  WHITE   (card top)    │   max-width: 420px
+      │  Title / Form / Button │   border-radius: 4px
+      ├────────────────────────┤
+      │  DARK    (card bottom) │   bg: var(--dc-dark) = #1A1B1E
+      │  links / register btn  │
+      └────────────────────────┘
+```
+
+| Element | Style |
+|---|---|
+| Form background | `#fff` |
+| CTA button | `var(--dc-gold)`, text `#1C1C1E`, weight 800 |
+| Input focus | border `var(--dc-gold)`, shadow `rgba(gold,.15)` |
+| Card bottom | `var(--dc-dark)` = `#1A1B1E` |
+
+### Routes
+
+| Route | Mô tả |
+|---|---|
+| `/login` | Email + password → redirect theo role |
+| `/register` | Full name + email + password + confirm |
+| `/forgot-password` | Email → gửi link reset → success state |
 
 ---
 
-### `/register`
-**Mục đích:** Tạo tài khoản mới (role mặc định: `user`)
+## Components dùng chung
 
-| Mục | Chi tiết |
-|-----|---------|
-| Inputs | Full name, Email, Password |
-| Submit | `POST /api/v1/auth/register` |
-| Success | Toast + redirect về `/login` |
+### Cards
+
+```css
+.card {
+  background: var(--surface);    /* #1C1D21 */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);  /* 16px */
+  box-shadow: var(--shadow-sm);
+}
+```
+
+### Stat Cards
+
+- Top colored border `3px solid {accent}`
+- Icon: 44×44, `bg: {accent}18` (18 opacity)
+- Label: `.75rem` uppercase muted
+- Value: `1.7rem` weight 800, `var(--text-heading)`
+
+### Buttons
+
+| Class | Dùng cho |
+|---|---|
+| `.btn-primary` | Purple primary |
+| `.btn-secondary` | Muted secondary |
+| `.btn-success` / `.btn-danger` | Status actions |
+| `.dc-btn-primary` | **Auth pages** — gold CTA |
+| `.dc-btn-outline` | **Auth pages** — viền trắng trên dark bg |
+
+### Badges
+
+| Class | Color |
+|---|---|
+| `.badge-success` | Green tint |
+| `.badge-warning` | Orange tint |
+| `.badge-danger` | Red tint |
+| `.badge-info` | Cyan tint |
+| Tất cả | `rgba()` bg để readable trên dark surface |
+
+### Forms
+
+```css
+.input {
+  background: var(--surface);   /* dark bg */
+  border: 1px solid var(--border);
+  color: var(--text-heading);
+}
+.input:focus { border-color: var(--primary); }
+```
+
+### Topbar
+
+- `background: var(--surface)` — cùng tone với sidebar
+- `border-bottom: 1px solid var(--border)`
+- Search box: `bg: var(--bg)` (tối hơn topbar)
+- Icon buttons: `bg: var(--bg)`, hover → primary accent
 
 ---
 
 ## User Pages (role: `user`)
 
 ### `/dashboard`
-**Mục đích:** Tổng quan tài khoản
 
 **Components:**
-- 3 stat cards: Wallet Balance · Proxy Orders · VPS Instances
-- Recent Transactions table (5 rows, không pagination)
+- System Announcements banner (dark gradient, `var(--dc-dark)`, gold border)
+- 4 stat cards: Wallet Balance · Proxy Orders · VPS Instances · Account Status
+- Recent Activities table (8 rows, View all link)
 
 **APIs:**
 ```
-GET /api/v1/billing/wallet      → balance
-GET /api/v1/proxy/orders        → count
-GET /api/v1/vps/instances       → count
-GET /api/v1/billing/transactions?limit=5
+GET /api/v1/billing/wallet
+GET /api/v1/proxy/orders
+GET /api/v1/vps/instances
+GET /api/v1/billing/transactions?limit=8
 ```
 
 ---
 
 ### `/dashboard/proxy`
-**Mục đích:** Quản lý Proxy Orders + mua proxy mới
 
-**Layout:** Header với 2 nút (Refresh, Buy Proxy) + Bảng + Pagination
+**Layout:** One-page catalog — chọn product → inline order panel
 
-**Buy Proxy Modal:**
-- Filter bar: proxy_type (residential/datacenter/mobile) · protocol (http/socks5) · location
-- Product cards grid: name · type badge · protocol badge · location · duration · bandwidth · price
-- Order summary: chọn product → nhập quantity → total preview
-- Submit: `POST /api/v1/proxy/orders` với `idempotency_key = crypto.randomUUID()`
-
-**Columns bảng:** Order # · Qty · Amount · Expires · Status badge · Credentials · Actions
-
-**Tính năng:**
-- **Credentials toggle:** Click "View" → `GET /api/v1/proxy/orders/{id}/credentials` → hiện `username:***` + Copy button. Click Hide để ẩn.
-- **Copy:** Copy `user:pass@host:port` vào clipboard → Toast
-- **Cancel:** chỉ khi `status = active/pending` → `useConfirm` → `DELETE` → refetch
-- **Auto-refresh:** `refetchInterval: 15000`
+**Buy Proxy Flow:**
+- Filter tabs (All / Residential / Datacenter / Mobile) — không có icon
+- Product cards grid (Vuexy card style, selected: outline + bg tint)
+- Order panel (slide in khi chọn): Country, ISP, Period (months), Quantity
+- Submit → `POST /api/v1/proxy/orders`
 
 **APIs:**
 ```
-GET    /api/v1/proxy/products?proxy_type=&protocol=&location=
+GET    /api/v1/proxy/products?proxy_type=
 GET    /api/v1/proxy/orders?page=N&limit=20
-POST   /api/v1/proxy/orders   {product_id, quantity, idempotency_key}
+POST   /api/v1/proxy/orders
 GET    /api/v1/proxy/orders/{id}/credentials
 DELETE /api/v1/proxy/orders/{id}
 ```
 
-**Status colors:** active → green · pending/processing → yellow · cancelled/failed → red · expired → grey
-
 ---
 
 ### `/dashboard/vps`
-**Mục đích:** Quản lý VPS Instances + deploy VPS mới
 
-**Layout:** Header với Deploy VPS button + Bảng + Pagination
+**Layout:** Page header (title + icon refresh **+** Deploy CTA) → instances table
 
-**Deploy VPS Modal:**
-- Plans grid: mỗi card hiển thị name · CPU · RAM · Disk · monthly_rate
-- Hostname input: lowercase + alphanumeric + dash (3-63 chars), client-side regex validation
-- Price summary: monthly + hourly breakdown
-- Submit: `POST /api/v1/vps/orders` → response 202 → Toast "VPS is being provisioned"
+**Deploy Modal:**
+- Plan cards grid (`repeat(auto-fill, minmax(200px,1fr))`)
+- **Selected plan card:** `border: 1px solid var(--dc-gold)` + `background: rgba(230,168,23,.07)` + shadow
+- Price: `var(--dc-gold)` khi selected, `var(--text-heading)` khi không
+- Summary box: `var(--surface-raised)` + `1px solid var(--border)`
+- Hostname validate: lowercase/numbers/hyphens, 3-63 chars
 
-**Columns bảng:** Hostname (+ VMID sub) · Plan ID · IP Address · Status
-
-**Actions per instance:**
-| Action | Condition | API |
-|--------|-----------|-----|
-| Start | status = stopped | `POST /vps/instances/{id}/start` |
-| Stop | status = running | `POST /vps/instances/{id}/stop` |
-| Reboot | status = running | `POST /vps/instances/{id}/reboot` |
-| Console | running/stopped | `GET /vps/instances/{id}/console` → open URL |
-| Terminate | not terminated | `useConfirm` → `DELETE /vps/instances/{id}` |
-
-**Auto-refresh:** `refetchInterval: 10000` (10s)
-
-**APIs:**
-```
-GET  /api/v1/vps/plans
-GET  /api/v1/vps/instances?page=N
-POST /api/v1/vps/orders   {plan_id, hostname, idempotency_key}
-```
+**Instances table:**
+- Status badge: `badge-{STATUS_COLOR[status]}`
+  - `running` → `badge-success` + **pulse dot** (7px green circle)
+  - `stopped` → `badge-secondary`
+  - `provisioning/booting` → `badge-info`
+  - `terminated` → `badge-terminated`
+- Actions: Start (green) · Stop · Reboot · Console · Terminate (red)
+- Auto-refresh: `refetchInterval: 10000`
+- Refresh button: `topbar-icon-btn` (icon-only)
 
 ---
 
 ### `/dashboard/wallet`
-**Mục đích:** Quản lý ví và nạp tiền
 
-**Layout:**
-1. 3 stat cards: Total Balance · Available · On Hold
-2. Top-up form
-3. Transaction history table
+**Layout:** 3 stat cards + top-up form + transaction table
 
-**Stat cards:**
-- **Total:** `wallet.balance`
-- **Available:** `balance - hold_amount`
-- **On Hold:** `wallet.hold_amount` (reserved for active orders)
+**Stat cards — dark+gold pattern:**
+| Card | `borderTop` | Icon color | Value color |
+|---|---|---|---|
+| Tổng số dư | `var(--dc-gold)` | `var(--dc-gold)` | `var(--dc-gold)` |
+| Khả dụng | `var(--success)` | `var(--success)` | `var(--success)` |
+| Tạm giữ | `var(--warning)` | `var(--warning)` | `var(--warning)` |
 
-**Top-up form:**
-- Amount input (min $5)
-- Payment method select: Bank Transfer / Crypto (USDT/USDC) / Stripe / VNPay
-- Submit → `POST /api/v1/billing/wallet/topup` → toast success
+Card structure:
+```
+border-top: 3px solid {accent}
+border-radius: 0 0 var(--radius-xl) var(--radius-xl)
+font-size: 1.6rem · weight 800
+```
+
+**Top-up form:** Card với card-header. Amount input nhập VND. Payment method select.
 
 **Transaction table:**
-| Column | Chi tiết |
-|--------|---------|
-| Date | Formatted `MMM DD, YYYY` |
-| Type | Badge (deposit / order_refund / hold / debit...) |
-| Description | Free text |
-| Amount | + green (credit) / − red (debit) |
-| Balance After | Running balance |
-| Status | Badge |
-
-**APIs:**
-```
-GET  /api/v1/billing/wallet
-GET  /api/v1/billing/transactions?page=N&limit=20
-POST /api/v1/billing/wallet/topup
-```
+- Amount: `+`(green) / `-`(red) + `formatVND()`
+- Balance After: `formatVND()`
+- Status badge: `badge-success`
 
 ---
 
 ### `/dashboard/profile`
-**Mục đích:** Cài đặt tài khoản cá nhân
 
-**Layout:** 3 cards xếp dọc
+**Layout:** 2-column grid — Account Info card (left) + Security column (right)
 
-**Card 1 — Account Information:**
-- Avatar circle (initials, gradient purple)
-- Full name, Email, Role badge, Status badge
-- Member since date
+**Account Info card:**
+- Avatar: 52px circle, `linear-gradient(135deg, rgba(230,168,23,.25), rgba(230,168,23,.1))`, gold border + gold initial letter
+- Avatar bên dưới hiển thị: full name + email + `badge-secondary` role tag
+- Info rows: label (`--text-muted`) / value (`--text-heading` weight 600) separated by `border-bottom: 1px solid var(--border-light)`
+- Edit mode: inline form fields
 
-**Card 2 — Change Password:**
-- 3 inputs ngang: Current · New · Confirm
-- Client-side validation: match check, min 8 chars
-- Submit → `POST /api/v1/auth/password` → `useToast`
+**Security column (2 cards):**
 
-**Card 3 — Active Sessions:**
-- Bảng: Device/UA · IP · Last Active · Revoke button
-- Revoke → `useConfirm` → `DELETE /api/v1/auth/sessions/{id}`
+1. **Two-Factor Authentication card:**
+   - Status box: `rgba(40,199,111,.06)` + green border (enabled) / dark tint + standard border (disabled)
+   - Shield icon: green (enabled) / muted (disabled)
+   - Disable button: `action-btn red`
+   - Enable button: `btn-primary`
 
-**APIs:**
-```
-GET    /api/v1/auth/me
-GET    /api/v1/auth/sessions
-POST   /api/v1/auth/password   {old_password, new_password}
-DELETE /api/v1/auth/sessions/{id}
-```
+2. **Password card:**
+   - Change Password button: gold outline (`rgba(230,168,23,.06)` bg, `rgba(230,168,23,.3)` border, `var(--dc-gold)` text)
 
 ---
 
 ## Reseller Pages (role: `reseller`)
 
-### `/reseller`
-**Mục đích:** Dashboard tổng quan reseller
+> Stat cards dùng dark+gold `borderTop` pattern. QuickLink cards hover → gold border. Webhook event pills active → gold.
 
-**Layout:** Stats grid + Quick links grid
+### `/reseller` — Dashboard
 
-**Stats (4 cards):**
-- Sub-Accounts count
-- Pricing Rules count (custom overrides)
-- API Keys count
-- Commission % (từ reseller account)
+**Stat cards:**
+| Card | `borderTop` |
+|---|---|
+| Sub-Accounts | `var(--dc-gold)` |
+| Pricing Rules | `var(--success)` |
+| API Keys | `var(--warning)` |
+| Commission | `var(--info)` |
 
-**Quick Links (4 cards):**
-- Pricing Management → `/reseller/pricing`
-- API Keys → `/reseller/api-keys`
-- Webhooks → `/reseller/webhooks`
-- Sub-Accounts → `/reseller/accounts`
-
-**APIs:**
-```
-GET /api/v1/reseller/dashboard
-GET /api/v1/reseller/users
-GET /api/v1/reseller/pricing
-GET /api/v1/reseller/api-keys
-```
+**QuickLink cards:** `border: 1px solid var(--border)`, hover → `borderColor: rgba(230,168,23,.4)` + `translateY(-2px)`. Icon box: `rgba(color,.1-.15)` tint background, icon = `var(--dc-gold)`.
 
 ---
 
-### `/reseller/accounts`
-**Mục đích:** Quản lý sub-accounts (user accounts nằm dưới reseller)
+### `/reseller/accounts` — Sub-Accounts
 
-**Layout:** Add form + bảng
-
-**Add Sub-Account form:**
-- User ID input (UUID của user cần thêm)
-- Credit Limit input ($)
-- Submit → `POST /api/v1/reseller/users`
-
-**Bảng:** User ID · Credit Limit · Added date
-
-> **Note:** Reseller phải ở trạng thái `approved` mới tạo được sub-account.
-
-**APIs:**
-```
-GET  /api/v1/reseller/users?page=N&limit=20
-POST /api/v1/reseller/users  {user_id, credit_limit}
-```
+Add by User ID + Hạn mức tín dụng (VND). Credit limit: `formatVND()`. Yêu cầu reseller status = `approved`.
 
 ---
 
-### `/reseller/pricing`
-**Mục đích:** Đặt giá bán riêng cho từng proxy product
+### `/reseller/pricing` — Pricing
 
-**Layout:** Bảng với inline edit
-
-**Columns:**
-| Column | Chi tiết |
-|--------|---------|
-| Product | Tên sản phẩm |
-| Type | Badge: datacenter / residential |
-| Location | Country/region |
-| Floor Price | Giá tối thiểu (không thể bán dưới mức này) — màu đỏ |
-| Sell Price | Giá bán ra — click để edit inline |
-| Markup | `(sell - floor) / floor × 100%` — tự tính, màu xanh/đỏ |
-| Actions | Edit / Save / Cancel |
-
-**Inline edit flow:**
-1. Click "Edit" hoặc click trực tiếp vào số
-2. Input xuất hiện in-place
-3. Validation: `sell_price >= floor_price`
-4. Click "Save" → `PUT /api/v1/reseller/pricing/{product_id}`
-5. Toast success/error
-
-**APIs:**
-```
-GET /api/v1/reseller/pricing
-PUT /api/v1/reseller/pricing/{product_id}  {sell_price}
-```
+Bảng inline edit. Validation: `sell_price >= floor_price`. Pháp: `formatVND()` cho floor + sell price.
 
 ---
 
-### `/reseller/api-keys`
-**Mục đích:** Tạo và quản lý API keys cho tích hợp programmatic
+### `/reseller/api-keys` — API Keys
 
-**Layout:** Create form + bảng
-
-**Create flow:**
-1. Nhập key name
-2. Click "Generate" → `POST /api/v1/reseller/api-keys`
-3. **Banner one-time:** Hiện plaintext key với nút Copy. Banner tự ẩn sau khi dismiss. Key không bao giờ hiện lại.
-
-**Bảng:** Name · Prefix (8 chars) · Scopes · Last Used · Expires · Status · Revoke
-
-**Revoke:** `useConfirm` → `DELETE /api/v1/reseller/api-keys/{id}`
-
-**APIs:**
-```
-GET    /api/v1/reseller/api-keys
-POST   /api/v1/reseller/api-keys  {name, scopes}
-DELETE /api/v1/reseller/api-keys/{id}
-```
+- New key banner: `border-left: 4px solid var(--dc-gold)` gold alert box
+- Key code: dark box `var(--bg)` + `var(--border)` border
+- Copy button: `action-btn` + `color: var(--dc-gold)`
+- Scope badges: `badge-secondary`
+- Revoke button: `action-btn red`
 
 ---
 
-### `/reseller/webhooks`
-**Mục đích:** Cấu hình HTTP endpoints nhận event notifications
+### `/reseller/webhooks` — Webhooks
 
-**Layout:** Create form + bảng
+- Event pills toggle: active → `rgba(230,168,23,.15)` bg + `var(--dc-gold)` text + `rgba(230,168,23,.5)` border
+- HMAC-SHA256 signing secret (password field)
 
-**Create form:**
-- Endpoint URL input
-- Signing Secret (HMAC-SHA256, optional)
-- Event picker: toggle buttons cho 9 event types:
-  - `order.created`, `order.status_changed`, `order.cancelled`
-  - `payment.completed`, `payment.failed`
-  - `vps.created`, `vps.status_changed`
-  - `reseller.approved`, `reseller.suspended`
-
-**Bảng:** Endpoint URL · Status (Active/Inactive) · Created · Delete
-
-**APIs:**
-```
-GET    /api/v1/reseller/webhooks
-POST   /api/v1/reseller/webhooks  {url, secret, events[]}
-DELETE /api/v1/reseller/webhooks/{id}
-```
+---
 
 ---
 
 ## Admin Pages (role: `admin` / `super_admin`)
 
-### `/admin`
-**Mục đích:** Admin dashboard + quản lý resellers
+> Stat cards dùng dark+gold `borderTop` pattern (không dùng gradient icon). Icon bài trong ô màu trà. Avatar user dùng gold gradient circle.
 
-**Layout:** Stats + Reseller management table
+### `/admin` — Admin Dashboard
 
-**Stats (2 cards):** Total Users · Total Resellers
+**Stat cards — dark+gold pattern:**
+| Card | `borderTop` | Icon color |
+|---|---|---|
+| Total Users | `var(--dc-gold)` | `var(--dc-gold)` |
+| Resellers | `var(--success)` | `var(--success)` |
+| Platform Status | `var(--info)` | `var(--info)` |
+| Pending Approval | `var(--warning)` | `var(--warning)` |
 
-**Reseller table:** Company · Email · Status · Commission · Created · Actions
-
-**Actions:**
-- Approve (chỉ hiện khi `status = pending`) → `PUT /api/v1/admin/resellers/{id}/approve`
-- Suspend (chỉ hiện khi `status = approved`) → `useConfirm` với reason input → `PUT /api/v1/admin/resellers/{id}/suspend`
-
-**APIs:**
-```
-GET /api/v1/admin/stats
-GET /api/v1/admin/resellers?status=pending
-PUT /api/v1/admin/resellers/{id}/approve
-PUT /api/v1/admin/resellers/{id}/suspend
-```
+**Resellers table:** Company/website 2-line cell · Status badge (`badge-approved/pending/suspended`) · Approve (green) + Suspend (red) action buttons.
 
 ---
 
-### `/admin/users`
-**Mục đích:** Danh sách tất cả users trong hệ thống
+### `/admin/users` — Users
 
-**Layout:** Search + bảng paginated
+**User table columns:** User · Role · Status · 2FA · Balance · Services · Last Login · Joined · Actions
 
-**Columns:** Email · Full Name · Role badge · Status badge · Created · Actions
+**User cell:**
+- Avatar: 34px gold gradient circle (`rgba(230,168,23,.2)` bg + `rgba(230,168,23,.3)` border), initials in `var(--dc-gold)`
+- Full name (`var(--text-heading)` 600) + email (`var(--text-muted)` .78rem)
 
-**APIs:**
-```
-GET /api/v1/admin/users?page=N&search=...
-```
+**Role badge:** `badge-{primary/info/warning/secondary}`
 
----
+**Status badge:** `badge-{success/warning/error}`
 
-### `/admin/proxy`
-**Mục đích:** Quản lý proxy products (admin tạo và bật/tắt sản phẩm)
+**2FA badge:** `badge-success` / `badge-secondary`
 
-**Layout:** Header với Add Product button + Bảng
+**Balance column:**
+- Loading: `…` in `var(--text-muted)`
+- Value: `formatVND(balance)` — fontWeight 700, `var(--text-heading)`, .875rem
+- No wallet: `—` in `var(--text-muted)`
 
-**Add Product Modal:**
-- Name, proxy_type (select), protocol (select), location
-- base_cost, duration_days (optional), bandwidth_gb (optional)
-- Provider ID (UUID)
+**Services column (proxy · vps):**
+- 🌐 proxy count — `var(--info)` if > 0, else muted
+- · separator
+- 🖥 vps count — `var(--success)` if > 0, else muted
+- Combined badge `badge-secondary` if total > 0
 
-**Columns bảng:** Name · Type badge · Protocol badge · Location · Duration · Bandwidth · Cost · Status toggle
+**Row hover:** `background: rgba(255,255,255,.03)` — very subtle, Hetzner-style
 
-**Status toggle:** Click Toggle button → `PUT /api/v1/admin/proxy/products/{id}/toggle` → icon đổi màu (green/grey)
+**Actions:** Edit · Wallet (gold, `var(--dc-gold)`) · 2FA-off (warning, shown only if enabled) · Delete (red)
 
-**APIs:**
-```
-GET  /api/v1/admin/proxy/products?page=N&limit=20
-POST /api/v1/admin/proxy/products   {name, proxy_type, protocol, location, base_cost, ...}
-PUT  /api/v1/admin/proxy/products/{id}/toggle
-```
+**Edit Modal:**
+- Tabs (Info / Activity): active tab underline `var(--dc-gold)`, color `var(--dc-gold)`
+- User header: gold avatar + `var(--bg)` box with `var(--border)` line
+- Save button: `btn-primary` + `<Save>` icon
 
----
-
-### `/admin/vps`
-**Mục đích:** Quản lý VPS plans (admin tạo và bật/tắt plan)
-
-**Layout:** Header với Add Plan button + Bảng
-
-**Add Plan Modal:**
-- Name, slug, cpu_cores, ram_mb, disk_gb
-- monthly_rate, hourly_rate
-
-**Columns bảng:** Name (+ slug sub) · CPU · RAM · Disk · Monthly · Hourly · Status toggle
-
-**RAM hiển thị:** `ram_mb / 1024` GB
-
-**APIs:**
-```
-GET  /api/v1/admin/vps/plans
-POST /api/v1/admin/vps/plans   {name, slug, cpu_cores, ram_mb, disk_gb, hourly_rate, monthly_rate}
-PUT  /api/v1/admin/vps/plans/{id}/toggle
-```
+**TopUp Modal (`TopUpModal`):**
+- Triggered by Wallet icon button (gold) in Actions column
+- User info card: gold avatar + name/email in `var(--bg)` + `var(--border)` box
+- Notice: `rgba(230,168,23,.08)` bg + `rgba(230,168,23,.25)` border — ghi rõ "admin adjustment — không tính vào doanh thu"
+- Amount input: raw digits (`inputMode="numeric"`), formatted preview `= X₫` below in `var(--dc-gold)` 600
+- Description field: optional
+- Submit: `btn-primary` full-width
 
 ---
 
-## Navigation theo Role
+### `/admin/resellers` — Reseller Management
 
-```
-admin:    OVERVIEW(Dashboard) → MANAGEMENT(Users, Resellers, Proxy Products, VPS Plans) → SERVICES(Proxy, VPS) → MY ACCOUNT(Wallet, Profile)
-reseller: OVERVIEW(Dashboard) → MANAGEMENT(Sub-Accounts, Pricing) → DEVELOPER(API Keys, Webhooks)
-user:     MAIN(Dashboard) → SERVICES(Proxy Orders, VPS Instances) → ACCOUNT(Wallet, Profile)
-```
+**Components:** `AppLayout` + `page-header` + paginated table
+
+Status badge: `badge-success` (approved) / `badge-warning` (pending) / `badge-error` (suspended)
+
+Action buttons: Approve `action-btn green` · Suspend `action-btn red` (with `useConfirm` dialog)
+
+---
+
+### `/admin/proxy` — Proxy Products
+
+Add product modal + status toggle ToggleLeft/Right. Base cost: `formatVND()`.
+
+---
+
+### `/admin/proxy/providers` — Proxy Providers
+
+Read-only. Adapter tag: colored inline badge (`{color}1a` bg). Status inline (CheckCircle2 green / XCircle muted). Info box: `var(--bg)` + `var(--border-light)` card.
+
+---
+
+### `/admin/vps` — VPS Plans
+
+Add plan modal + ToggleLeft/Right. Monthly/hourly rate: `formatVND()`.
+
+---
+
+### `/admin/logs` — Audit Logs
+
+**Layout:** `page-header` (title left, filter controls right)
+
+Filters: Event type `select.input` + User ID `input` + `btn-secondary` Filter/Clear buttons.
+
+Audit table: `<AuditLog>` component. Realtime stream via WebSocket.
+
+---
+
+---
+
+## Token & Auth
+
+| Cookie | Expires | Flag |
+|---|---|---|
+| `pvp_token` | 1 ngày | `sameSite: lax` — KHÔNG `secure` trên HTTP |
+| `pvp_refresh` | 30 ngày | `sameSite: lax` |
+
+Auto-refresh: axios interceptor gọi `POST /v1/auth/refresh` khi nhận 401. Fail → redirect `/login`.
+
+Zustand persist key: `pvp-auth` (localStorage). Lưu `user + isAuthenticated`, token trong cookie.

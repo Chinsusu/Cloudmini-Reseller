@@ -253,12 +253,19 @@ export default function ProfilePage() {
 
                     {/* Avatar */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: '1.2rem' }}>
+                        <div style={{
+                            width: 52, height: 52, borderRadius: '50%',
+                            background: 'linear-gradient(135deg, rgba(230,168,23,.25), rgba(230,168,23,.1))',
+                            border: '2px solid rgba(230,168,23,.35)',
+                            display: 'grid', placeItems: 'center',
+                            fontWeight: 800, fontSize: '1.2rem', color: 'var(--dc-gold)',
+                        }}>
                             {user?.email?.[0]?.toUpperCase() ?? '?'}
                         </div>
                         <div>
-                            <p style={{ fontWeight: 700, color: 'var(--text-heading)' }}>{user?.full_name || '—'}</p>
-                            <p style={{ fontSize: '.82rem', color: 'var(--text-muted)' }}>{user?.email}</p>
+                            <p style={{ fontWeight: 700, color: 'var(--text-heading)', fontSize: '1rem' }}>{user?.full_name || '—'}</p>
+                            <p style={{ fontSize: '.82rem', color: 'var(--text-muted)', marginTop: '.1rem' }}>{user?.email}</p>
+                            <span className="badge badge-secondary" style={{ marginTop: '.35rem' }}>{user?.role}</span>
                         </div>
                     </div>
 
@@ -282,17 +289,16 @@ export default function ProfilePage() {
                             </div>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                             {[
                                 ['Email', user?.email],
                                 ['Full Name', user?.full_name || '—'],
                                 ['Phone', user?.phone || '—'],
-                                ['Role', user?.role],
                                 ['Status', user?.status],
                             ].map(([label, value]) => (
-                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.875rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '.5rem' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-                                    <span style={{ fontWeight: 500 }}>{value}</span>
+                                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.875rem', borderBottom: '1px solid var(--border-light)', padding: '.625rem 0' }}>
+                                    <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>{value}</span>
                                 </div>
                             ))}
                         </div>
@@ -306,7 +312,13 @@ export default function ProfilePage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', fontWeight: 700, marginBottom: '1rem' }}>
                             <ShieldCheck size={17} /> Two-Factor Authentication
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '.875rem', background: twoFAEnabled ? 'rgba(34,197,94,.06)' : 'var(--bg)', borderRadius: 10, border: `1px solid ${twoFAEnabled ? 'rgba(34,197,94,.25)' : 'var(--border-light)'}`, marginBottom: '1rem' }}>
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: '1rem', padding: '.875rem',
+                            background: twoFAEnabled ? 'rgba(40,199,111,.06)' : 'rgba(255,255,255,.03)',
+                            borderRadius: 10,
+                            border: `1px solid ${twoFAEnabled ? 'rgba(40,199,111,.2)' : 'var(--border)'}`,
+                            marginBottom: '1rem',
+                        }}>
                             <div style={{ width: 40, height: 40, borderRadius: '50%', background: twoFAEnabled ? 'rgba(34,197,94,.15)' : 'var(--border-light)', display: 'grid', placeItems: 'center' }}>
                                 {twoFAEnabled ? <ShieldCheck size={18} style={{ color: 'var(--success)' }} /> : <ShieldOff size={18} style={{ color: 'var(--text-muted)' }} />}
                             </div>
@@ -343,7 +355,7 @@ export default function ProfilePage() {
                         <p style={{ fontSize: '.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
                             It&apos;s a good idea to use a strong password that you don&apos;t use elsewhere.
                         </p>
-                        <button className="action-btn" style={{ width: '100%', justifyContent: 'center', padding: '.6rem' }}
+                        <button className="action-btn" style={{ width: '100%', justifyContent: 'center', padding: '.6rem', color: 'var(--dc-gold)', border: '1px solid rgba(230,168,23,.3)', background: 'rgba(230,168,23,.06)' }}
                             onClick={() => setShowChangePwd(true)}>
                             <Lock size={14} /> Change Password
                         </button>

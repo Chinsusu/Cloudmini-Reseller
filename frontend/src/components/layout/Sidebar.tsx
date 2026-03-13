@@ -47,6 +47,7 @@ const adminNav = [
             { href: '/admin/users', label: 'Users', icon: Users },
             { href: '/admin/resellers', label: 'Resellers', icon: ShieldCheck },
             { href: '/admin/proxy', label: 'Proxy Products', icon: Globe },
+            { href: '/admin/proxy/providers', label: 'Proxy Providers', icon: Cloud },
             { href: '/admin/vps', label: 'VPS Plans', icon: Server },
             { href: '/admin/logs', label: 'Audit Logs', icon: ClipboardList },
         ]
@@ -130,7 +131,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
                             // Root dashboard links (e.g. /admin, /dashboard, /reseller) should only
                             // be active on exact match — sub-routes like /admin/users must NOT
                             // highlight the parent dashboard item.
-                            const isRootOnly = ['/admin', '/dashboard', '/reseller'].includes(href)
+                            const isRootOnly = ['/admin', '/dashboard', '/reseller', '/admin/proxy'].includes(href)
                             const active = pathname === href ||
                                 (!isRootOnly && href !== '/' && pathname?.startsWith(href + '/'))
                             return (
