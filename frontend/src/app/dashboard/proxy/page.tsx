@@ -25,84 +25,136 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 }
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
+const PROXY_TYPE_META: Record<string, { color: string; bg: string; label: string }> = {
+    residential: { color: '#4ade80', bg: 'rgba(74,222,128,.12)',  label: 'Residential' },
+    datacenter:  { color: '#60a5fa', bg: 'rgba(96,165,250,.12)', label: 'Datacenter'  },
+    mobile:      { color: '#f472b6', bg: 'rgba(244,114,182,.12)', label: 'Mobile'     },
+    isp:         { color: '#a78bfa', bg: 'rgba(167,139,250,.12)', label: 'ISP'        },
+}
+
 function ProductCard({ product, selected, onClick }: { product: any; selected: boolean; onClick: () => void }) {
     const isRotating = product.metadata?.service_id?.includes('rotating')
-    return (
-        <div onClick={onClick} style={{
-            background: selected ? 'rgba(230,168,23,.07)' : 'var(--surface)',
-            border: '1px solid',
-            borderColor: selected ? 'var(--dc-gold)' : 'var(--border)',
-            borderRadius: 'var(--radius-xl)',
-            padding: '1.35rem',
-            cursor: 'pointer',
-            transition: 'background .15s, border-color .15s, box-shadow .15s',
-            boxShadow: selected ? 'var(--shadow)' : 'var(--shadow-sm)',
-            position: 'relative',
-        }}>
-            {selected && (
-                <div style={{ position: 'absolute', top: 12, right: 12 }}>
-                    <CheckCircle2 size={18} color="var(--dc-gold)" />
-                </div>
-            )}
+    const meta = PROXY_TYPE_META[product.proxy_type?.toLowerCase()] ?? {
+        color: 'var(--dc-gold)', bg: 'rgba(230,168,23,.12)', label: product.proxy_type ?? 'Proxy',
+    }
 
-            {/* Type badge */}
-            <div style={{ marginBottom: '.65rem' }}>
+    return (
+        <div
+            onClick={onClick}
+            style={{
+                background: selected ? 'rgba(230,168,23,.05)' : 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-xl)',
+                padding: '1.35rem',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '.75rem',
+                transition: 'transform .18s ease, box-shadow .18s ease',
+                boxShadow: selected
+                    ? '0 0 0 2px var(--dc-gold), 0 8px 24px rgba(230,168,23,.15)'
+                    : '0 2px 8px rgba(0,0,0,.15)',
+                transform: selected ? 'translateY(-2px)' : undefined,
+            }}
+            onMouseEnter={e => {
+                if (!selected) (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)'
+                if (!selected) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0,0,0,.25)'
+            }}
+            onMouseLeave={e => {
+                if (!selected) (e.currentTarget as HTMLDivElement).style.transform = ''
+                if (!selected) (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,.15)'
+            }}
+        >
+            {/* Type badge + checkmark */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{
-                    display: 'inline-block', fontSize: '.7rem', fontWeight: 700,
-                    textTransform: 'uppercase', letterSpacing: '.07em',
-                    color: selected ? 'var(--dc-gold)' : 'var(--text-muted)',
-                    background: selected ? 'rgba(230,168,23,.15)' : 'rgba(255,255,255,.06)',
-                    padding: '.2rem .65rem', borderRadius: 'var(--radius-pill)',
+                    display: 'inline-flex', alignItems: 'center', gap: '.3rem',
+                    fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase',
+                    letterSpacing: '.07em',
+                    color: meta.color,
+                    background: meta.bg,
+                    padding: '.2rem .65rem',
+                    borderRadius: 'var(--radius-pill)',
                 }}>
-                    {product.proxy_type} · {product.protocol?.toUpperCase()}
+                    {meta.label}
+                    {product.protocol && <span style={{ opacity: .65 }}>· {product.protocol.toUpperCase()}</span>}
                 </span>
+                {selected && (
+                    <div style={{
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: 'var(--dc-gold)',
+                        display: 'grid', placeItems: 'center', flexShrink: 0,
+                    }}>
+                        <CheckCircle2 size={12} color="#000" strokeWidth={3} />
+                    </div>
+                )}
             </div>
 
             {/* Name */}
-            <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-heading)', marginBottom: '.6rem', lineHeight: 1.3, paddingRight: selected ? '1.6rem' : 0 }}>
+            <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-heading)', lineHeight: 1.25 }}>
                 {product.name}
             </div>
 
-            {/* Specs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '.25rem', marginBottom: '.9rem' }}>
+            {/* Feature pills */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.3rem' }}>
                 {product.location && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem', fontSize: '.8rem', color: 'var(--text-muted)' }}>
-                        <Globe size={11} /> {product.location}
-                    </div>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                        <Globe size={10} /> {product.location}
+                    </span>
                 )}
                 {product.duration_days && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem', fontSize: '.8rem', color: 'var(--text-muted)' }}>
-                        <Clock size={11} /> {product.duration_days} days
-                    </div>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                        <Clock size={10} /> {product.duration_days} ngày
+                    </span>
                 )}
                 {product.bandwidth_gb && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem', fontSize: '.8rem', color: 'var(--text-muted)' }}>
-                        <Database size={11} /> {product.bandwidth_gb} GB
-                    </div>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                        <Database size={10} /> {product.bandwidth_gb} GB
+                    </span>
                 )}
-                {!product.duration_days && !product.bandwidth_gb && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem', fontSize: '.8rem', color: 'var(--text-muted)' }}>
-                        <Zap size={11} /> Monthly / per GB
-                    </div>
+                {isRotating && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 600, color: meta.color, background: meta.bg, border: '1px solid transparent', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                        <Zap size={10} /> Rotating
+                    </span>
+                )}
+                {!product.duration_days && !product.bandwidth_gb && !isRotating && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.04)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                        <Zap size={10} /> Pay per GB
+                    </span>
                 )}
             </div>
 
             {/* Divider */}
-            <div style={{ height: 1, background: 'var(--border-light)', marginBottom: '.9rem' }} />
+            <div style={{ height: 1, background: 'var(--border-light)' }} />
 
-            {/* Price + CTA */}
+            {/* Pricing footer */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                    <span style={{ fontWeight: 800, fontSize: '1.2rem', color: selected ? 'var(--dc-gold)' : 'var(--text-heading)' }}>
+                    <div style={{ fontSize: '.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.15rem' }}>
+                        {isRotating ? 'Giá / GB' : 'Giá / tháng'}
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '1.3rem', color: selected ? 'var(--dc-gold)' : 'var(--text-heading)', lineHeight: 1, letterSpacing: '-.02em' }}>
                         {formatVND(product.base_cost)}
-                    </span>
-                    <span style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginLeft: '.15rem' }}>
-                        {isRotating ? '/GB' : '/tháng'}
-                    </span>
+                        <span style={{ fontSize: '.72rem', fontWeight: 400, color: 'var(--text-muted)', marginLeft: '.2rem' }}>
+                            {isRotating ? '/GB' : '/tháng'}
+                        </span>
+                    </div>
                 </div>
-                <span style={{ fontSize: '.78rem', fontWeight: 600, color: selected ? 'var(--dc-gold)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '.2rem' }}>
-                    {selected ? 'Selected' : 'Select'} <ChevronRight size={13} style={{ transform: selected ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} />
-                </span>
+
+                <button style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '.3rem',
+                    padding: '.42rem .9rem',
+                    background: selected ? 'var(--dc-gold)' : 'transparent',
+                    color: selected ? 'var(--dc-gold-text)' : meta.color,
+                    border: `1px solid ${selected ? 'var(--dc-gold)' : meta.color}`,
+                    borderRadius: 'var(--radius)',
+                    fontWeight: 700, fontSize: '.8rem',
+                    cursor: 'pointer',
+                    transition: 'all .15s',
+                    flexShrink: 0,
+                }}>
+                    {selected ? <><CheckCircle2 size={13} /> Đã chọn</> : <>Chọn <ChevronRight size={13} /></>}
+                </button>
             </div>
         </div>
     )
@@ -142,18 +194,33 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
             toastError('Please select a country')
             return
         }
+        const payload = {
+            product_id: product.id,
+            qty,
+            metadata: {
+                country: country || undefined,
+                isp_id: ispId || undefined,
+                period_months: isStatic ? periodMonths : undefined,
+            }
+        }
+        console.log('[OrderPanel] handleOrder payload:', payload)
         setPlacing(true)
         try {
-            await proxyAPI.createOrder(product.id, qty, {
+            const res = await proxyAPI.createOrder(product.id, qty, {
                 country: country || undefined,
                 isp_id: ispId || undefined,
                 period_months: isStatic ? periodMonths : undefined,
             })
+            console.log('[OrderPanel] createOrder success:', res?.data)
             success('Order placed! Proxy is being activated...')
             qc.invalidateQueries({ queryKey: ['proxy-orders'] })
             onSuccess()
         } catch (err: any) {
-            toastError(err?.response?.data?.error?.message ?? 'Order failed')
+            console.error('[OrderPanel] createOrder error full:', err)
+            console.error('[OrderPanel] response status:', err?.response?.status)
+            console.error('[OrderPanel] response data:', err?.response?.data)
+            const msg = err?.response?.data?.error?.message ?? err?.message ?? 'Order failed'
+            toastError(msg)
         } finally {
             setPlacing(false)
         }
@@ -396,8 +463,38 @@ function OrdersTable({ orders, onCancel }: { orders: any[]; onCancel: (id: strin
     )
 }
 
+// ─── Tab Button ───────────────────────────────────────────────────────────────
+function TabBtn({ label, active, onClick, count }: { label: string; active: boolean; onClick: () => void; count?: number }) {
+    return (
+        <button onClick={onClick} style={{
+            display: 'inline-flex', alignItems: 'center', gap: '.4rem',
+            padding: '.5rem 1.2rem',
+            background: active ? 'var(--surface)' : 'transparent',
+            color: active ? 'var(--text-heading)' : 'var(--text-muted)',
+            border: 'none',
+            borderBottom: active ? '2px solid var(--dc-gold)' : '2px solid transparent',
+            fontWeight: active ? 700 : 500,
+            fontSize: '.875rem',
+            cursor: 'pointer',
+            transition: 'all .15s',
+            marginBottom: '-1px',
+        }}>
+            {label}
+            {count !== undefined && (
+                <span style={{
+                    padding: '.1rem .5rem', borderRadius: '100px',
+                    background: active ? 'rgba(230,168,23,.15)' : 'rgba(255,255,255,.08)',
+                    color: active ? 'var(--dc-gold)' : 'var(--text-muted)',
+                    fontSize: '.72rem', fontWeight: 700,
+                }}>{count}</span>
+            )}
+        </button>
+    )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProxyOrdersPage() {
+    const [tab, setTab] = useState<'buy' | 'orders'>('buy')
     const [page, setPage] = useState(1)
     const [selected, setSelected] = useState<any>(null)
     const [filterType, setFilterType] = useState('')
@@ -422,16 +519,16 @@ export default function ProxyOrdersPage() {
 
     const cancelMut = useMutation({
         mutationFn: (id: string) => proxyAPI.cancelOrder(id),
-        onSuccess: () => { success('Order cancelled'); qc.invalidateQueries({ queryKey: ['proxy-orders'] }) },
-        onError: (err: any) => toastError(err?.response?.data?.error?.message ?? 'Cancel failed'),
+        onSuccess: () => { success('Đã hủy đơn'); qc.invalidateQueries({ queryKey: ['proxy-orders'] }) },
+        onError: (err: any) => toastError(err?.response?.data?.error?.message ?? 'Hủy thất bại'),
     })
     const handleCancel = async (id: string, num: string) => {
-        const ok = await confirm({ title: 'Cancel Order', message: `Cancel order ${num}? This cannot be undone.`, confirmLabel: 'Cancel Order', variant: 'danger' })
+        const ok = await confirm({ title: 'Hủy đơn hàng', message: `Hủy đơn ${num}? Thao tác này không thể hoàn tác.`, confirmLabel: 'Hủy đơn', variant: 'danger' })
         if (ok) cancelMut.mutate(id)
     }
 
     const typeFilters = [
-        { value: '', label: 'All' },
+        { value: '', label: 'Tất cả' },
         { value: 'residential', label: 'Residential' },
         { value: 'datacenter', label: 'Datacenter' },
         { value: 'mobile', label: 'Mobile' },
@@ -445,86 +542,103 @@ export default function ProxyOrdersPage() {
             <div className="page-header">
                 <div>
                     <h1 className="page-title">Proxy Services</h1>
-                    <p className="page-subtitle">Select a product to configure and place an order</p>
+                    <p className="page-subtitle">Mua và quản lý proxy của bạn</p>
                 </div>
                 <button className="topbar-icon-btn" onClick={() => refetch()} title="Refresh">
                     <RefreshCw size={15} />
                 </button>
             </div>
 
-            {/* Filter tabs — gold active */}
-            <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                {typeFilters.map(f => (
-                    <button key={f.value} onClick={() => { setFilterType(f.value); setSelected(null) }}
-                        style={{
-                            padding: '.42rem 1.1rem',
-                            borderRadius: 'var(--radius-pill)',
-                            fontSize: '.82rem',
-                            fontWeight: 600,
-                            border: filterType === f.value ? '1px solid rgba(230,168,23,.4)' : '1px solid var(--border)',
-                            background: filterType === f.value ? 'rgba(230,168,23,.12)' : 'var(--surface)',
-                            color: filterType === f.value ? 'var(--dc-gold)' : 'var(--text)',
-                            cursor: 'pointer',
-                            transition: 'all .15s',
-                            boxShadow: filterType === f.value ? '0 0 0 1px rgba(230,168,23,.15)' : 'none',
-                        }}>
-                        {f.label}
-                    </button>
-                ))}
+            {/* ─── Tab Navigation ─── */}
+            <div style={{
+                display: 'flex', borderBottom: '1px solid var(--border)',
+                marginBottom: '1.5rem', gap: '.25rem',
+            }}>
+                <TabBtn label="🛒 Mua Proxy" active={tab === 'buy'} onClick={() => setTab('buy')} />
+                <TabBtn label="📦 Proxy của tôi" active={tab === 'orders'} onClick={() => setTab('orders')} count={orders.length || undefined} />
             </div>
 
-            {/* Products grid */}
-            {prodLoading ? (
-                <div className="loading-spinner">Loading products...</div>
-            ) : products.length === 0 ? (
-                <div className="card">
-                    <div className="empty-state">
-                        <Globe size={40} opacity={0.25} />
-                        <p>No proxy products available</p>
-                        <span style={{ fontSize: '.82rem', color: 'var(--text-muted)' }}>Ask your admin to add products</span>
+            {/* ─── Tab: Mua Proxy ─── */}
+            {tab === 'buy' && (
+                <div className="fade-in">
+                    {/* Filter chips */}
+                    <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+                        {typeFilters.map(f => (
+                            <button key={f.value} onClick={() => { setFilterType(f.value); setSelected(null) }}
+                                style={{
+                                    padding: '.38rem 1rem',
+                                    borderRadius: 'var(--radius-pill)',
+                                    fontSize: '.82rem', fontWeight: 600,
+                                    border: filterType === f.value ? '1px solid rgba(230,168,23,.4)' : '1px solid var(--border)',
+                                    background: filterType === f.value ? 'rgba(230,168,23,.12)' : 'var(--surface)',
+                                    color: filterType === f.value ? 'var(--dc-gold)' : 'var(--text)',
+                                    cursor: 'pointer', transition: 'all .15s',
+                                }}>
+                                {f.label}
+                            </button>
+                        ))}
                     </div>
-                </div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '1rem', padding: '2px' }}>
-                    {products.map((p: any) => (
-                        <ProductCard
-                            key={p.id}
-                            product={p}
-                            selected={selected?.id === p.id}
-                            onClick={() => setSelected(selected?.id === p.id ? null : p)}
-                        />
-                    ))}
-                </div>
-            )}
 
-            {/* Inline Order Panel */}
-            {selected && (
-                <OrderPanel
-                    product={selected}
-                    onClose={() => setSelected(null)}
-                    onSuccess={() => setSelected(null)}
-                />
-            )}
-
-            {/* Orders */}
-            <div style={{ marginTop: '1.75rem' }}>
-                {ordersLoading ? (
-                    <div className="loading-spinner">Loading orders...</div>
-                ) : (
-                    <>
-                        <OrdersTable orders={orders} onCancel={handleCancel} />
-                        {orders.length > 0 && (
-                            <Pagination page={page} totalPages={meta.pages ?? 1} total={meta.total ?? 0} limit={20} onPageChange={setPage} />
-                        )}
-                        {orders.length === 0 && products.length > 0 && !selected && (
-                            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '.875rem', padding: '2rem 0' }}>
-                                <Package size={28} opacity={0.25} style={{ display: 'block', margin: '0 auto .5rem' }} />
-                                No orders yet — select a product above to get started
+                    {/* Products grid */}
+                    {prodLoading ? (
+                        <div className="loading-spinner">Đang tải sản phẩm...</div>
+                    ) : products.length === 0 ? (
+                        <div className="card">
+                            <div className="empty-state">
+                                <Globe size={40} opacity={0.25} />
+                                <p>Chưa có sản phẩm proxy nào</p>
+                                <span style={{ fontSize: '.82rem', color: 'var(--text-muted)' }}>Liên hệ admin để thêm sản phẩm</span>
                             </div>
-                        )}
-                    </>
-                )}
-            </div>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem', padding: '2px' }}>
+                            {products.map((p: any) => (
+                                <ProductCard
+                                    key={p.id}
+                                    product={p}
+                                    selected={selected?.id === p.id}
+                                    onClick={() => setSelected(selected?.id === p.id ? null : p)}
+                                />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Order panel (slide-in below selected card) */}
+                    {selected && (
+                        <OrderPanel
+                            product={selected}
+                            onClose={() => setSelected(null)}
+                            onSuccess={() => { setSelected(null); setTab('orders') }}
+                        />
+                    )}
+                </div>
+            )}
+
+            {/* ─── Tab: Proxy của tôi ─── */}
+            {tab === 'orders' && (
+                <div className="fade-in">
+                    {ordersLoading ? (
+                        <div className="loading-spinner">Đang tải đơn hàng...</div>
+                    ) : orders.length === 0 ? (
+                        <div className="card">
+                            <div className="empty-state">
+                                <Package size={44} opacity={0.25} />
+                                <p>Bạn chưa có đơn proxy nào</p>
+                                <button className="btn-primary" onClick={() => setTab('buy')}>
+                                    <ShoppingCart size={14} /> Mua Proxy ngay
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <OrdersTable orders={orders} onCancel={handleCancel} />
+                            {orders.length > 0 && (
+                                <Pagination page={page} totalPages={meta.pages ?? 1} total={meta.total ?? 0} limit={20} onPageChange={setPage} />
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
         </AppLayout>
     )
 }

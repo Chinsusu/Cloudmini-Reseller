@@ -1,6 +1,18 @@
 import axios from 'axios'
 import Cookies from 'js-cookie'
 
+// Safe UUID generator — crypto.randomUUID() only works in secure contexts (HTTPS/localhost).
+// Falls back to a Math.random-based RFC4122 v4 UUID for non-secure origins (e.g. local IP).
+function generateUUID(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID()
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = (Math.random() * 16) | 0
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+    })
+}
+
 const api = axios.create({
     baseURL: '/api',
     timeout: 30_000,
@@ -86,7 +98,7 @@ export const proxyAPI = {
         api.get(`/v1/proxy/products?proxy_type=${proxyType}&protocol=${protocol}&location=${location}`),
     listOrders: (page = 1) => api.get(`/v1/proxy/orders?page=${page}&limit=20`),
     createOrder: (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number }) =>
-        api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, metadata: meta ?? {}, idempotency_key: crypto.randomUUID() }),
+        api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, metadata: meta ?? {}, idempotency_key: generateUUID() }),
     getOrder: (id: string) => api.get(`/v1/proxy/orders/${id}`),
     cancelOrder: (id: string) => api.delete(`/v1/proxy/orders/${id}`),
     getCredentials: (id: string) => api.get(`/v1/proxy/orders/${id}/credentials`),
@@ -100,7 +112,7 @@ export const vpsAPI = {
     listInstances: (page = 1) => api.get(`/v1/vps/instances?page=${page}&limit=20`),
     getInstance: (id: string) => api.get(`/v1/vps/instances/${id}`),
     createVPS: (planId: string, hostname: string) =>
-        api.post('/v1/vps/orders', { plan_id: planId, hostname, idempotency_key: crypto.randomUUID() }),
+        api.post('/v1/vps/orders', { plan_id: planId, hostname, idempotency_key: generateUUID() }),
     startInstance: (id: string) => api.post(`/v1/vps/instances/${id}/start`),
     stopInstance: (id: string) => api.post(`/v1/vps/instances/${id}/stop`),
     rebootInstance: (id: string) => api.post(`/v1/vps/instances/${id}/reboot`),
