@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ import (
 // Handler holds proxy usecase dependencies.
 type Handler struct {
 	orderUC          *usecase.OrderUsecase
+	orderRepo        domain.IOrderRepository
 	productRepo      domain.IProductRepository
 	providerRepo     domain.IProviderRepository
 	webhookHandler   http.Handler // Proxy-Cheap webhook receiver
@@ -27,8 +29,8 @@ type Handler struct {
 	logger           *slog.Logger
 }
 
-func NewHandler(orderUC *usecase.OrderUsecase, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
-	return &Handler{orderUC: orderUC, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
+func NewHandler(orderUC *usecase.OrderUsecase, orderRepo domain.IOrderRepository, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
+	return &Handler{orderUC: orderUC, orderRepo: orderRepo, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
 }
 
 // WithProxyCheapClient injects the proxy-cheap client into the handler (for service-options endpoint).
@@ -128,6 +130,54 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.orderUC.CancelOrder(r.Context(), orderID, userID, req.Reason); err != nil {
 		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PatchOrder handles PATCH /api/v1/proxy/orders/{id}
+// Allows users to set custom_price and custom_expires_at on their own orders.
+func (h *Handler) PatchOrder(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	orderID := mustParseUUID(chi.URLParam(r, "id"))
+
+	// Verify ownership
+	order, err := h.orderUC.GetOrder(r.Context(), orderID, userID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	_ = order // ownership verified
+
+	var req struct {
+		CustomPrice     *string `json:"custom_price"`
+		CustomExpiresAt *string `json:"custom_expires_at"` // RFC3339
+		AdminNote       string  `json:"admin_note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+
+	var customPrice *decimal.Decimal
+	if req.CustomPrice != nil && *req.CustomPrice != "" {
+		v, _ := decimal.NewFromString(*req.CustomPrice)
+		customPrice = &v
+	}
+
+	var customExpiresAt *time.Time
+	if req.CustomExpiresAt != nil && *req.CustomExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, *req.CustomExpiresAt)
+		if err != nil {
+			apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid custom_expires_at, use RFC3339")
+			return
+		}
+		customExpiresAt = &t
+	}
+
+	if err := h.orderRepo.UpdateOrder(r.Context(), orderID, customPrice, customExpiresAt, req.AdminNote); err != nil {
+		h.logger.ErrorContext(r.Context(), "PatchOrder error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -326,10 +376,11 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 		r.Route("/api/v1/proxy", func(r chi.Router) {
 			r.Get("/products", h.ListProducts)
 			r.Get("/orders", h.ListOrders)
-			r.Post("/orders", h.CreateOrder)
-			r.Get("/orders/{id}", h.GetOrder)
-			r.Delete("/orders/{id}", h.CancelOrder)
-			r.Get("/orders/{id}/credentials", h.GetCredentials)
+				r.Post("/orders", h.CreateOrder)
+				r.Get("/orders/{id}", h.GetOrder)
+				r.Patch("/orders/{id}", h.PatchOrder)
+				r.Delete("/orders/{id}", h.CancelOrder)
+				r.Get("/orders/{id}/credentials", h.GetCredentials)
 		})
 
 		// Admin endpoints

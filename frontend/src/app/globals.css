@@ -1144,3 +1144,54 @@ html, body {
   .dc-card-top { padding: 1.5rem 1.25rem 1.25rem; }
   .dc-card-bottom { padding: 1rem 1.25rem 1.25rem; }
 }
+
+/* ─── Proxy Product Card ──────────────────────────────────────────────────── */
+.proxy-product-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.proxy-product-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, var(--glow, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  transition: opacity .2s;
+  opacity: 0;
+}
+
+.proxy-product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.2);
+  border-color: rgba(var(--accent-rgb, 255,255,255), .25);
+}
+
+.proxy-product-card:hover::before {
+  opacity: 1;
+}
+
+.proxy-product-card[data-selected="true"] {
+  border-color: var(--dc-gold);
+  background: rgba(230,168,23,.04);
+  box-shadow: 0 0 0 1px rgba(230,168,23,.2), 0 8px 24px rgba(230,168,23,.12);
+  transform: translateY(-2px);
+}
+
+.proxy-product-card[data-selected="true"]::before {
+  opacity: 1;
+}
+
+.proxy-product-card:active {
+  transform: translateY(-1px);
+  transition-duration: .07s;
+}
+

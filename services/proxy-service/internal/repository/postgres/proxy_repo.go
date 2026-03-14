@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/pvp/proxy-service/internal/domain"
+	"github.com/shopspring/decimal"
 )
 
 // OrderRepository implements domain.IOrderRepository.
@@ -43,11 +44,12 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Or
 // orderSelectCOALESCE is the safe SELECT for order rows — handles nullable text columns.
 const orderSelectCOALESCE = `SELECT
 	id, order_number, user_id, reseller_id, product_id, provider_id, status, quantity,
-	unit_price, total_amount,
+	unit_price, total_amount, custom_price,
 	COALESCE(provider_order_id,'') AS provider_order_id,
 	COALESCE(credentials,'')       AS credentials,
-	activated_at, expires_at, cancelled_at,
+	activated_at, expires_at, custom_expires_at, cancelled_at,
 	COALESCE(cancel_reason,'')     AS cancel_reason,
+	COALESCE(admin_note,'')        AS admin_note,
 	idempotency_key, request_id, created_at, updated_at
 	FROM proxy.orders`
 
@@ -80,6 +82,17 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status
 		`UPDATE proxy.orders SET status=$1, updated_at=NOW() WHERE id=$2`, status, id,
 	); err != nil {
 		return fmt.Errorf("OrderRepository.UpdateStatus: %w", err)
+	}
+	return nil
+}
+
+// UpdateOrder sets custom_price, custom_expires_at and admin_note for an order.
+func (r *OrderRepository) UpdateOrder(ctx context.Context, id uuid.UUID, customPrice *decimal.Decimal, customExpiresAt *time.Time, adminNote string) error {
+	if _, err := r.db.ExecContext(ctx,
+		`UPDATE proxy.orders SET custom_price=$1, custom_expires_at=$2, admin_note=NULLIF($3,''), updated_at=NOW() WHERE id=$4`,
+		customPrice, customExpiresAt, adminNote, id,
+	); err != nil {
+		return fmt.Errorf("OrderRepository.UpdateOrder: %w", err)
 	}
 	return nil
 }

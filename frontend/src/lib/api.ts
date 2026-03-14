@@ -101,6 +101,8 @@ export const proxyAPI = {
         api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, metadata: meta ?? {}, idempotency_key: generateUUID() }),
     getOrder: (id: string) => api.get(`/v1/proxy/orders/${id}`),
     cancelOrder: (id: string) => api.delete(`/v1/proxy/orders/${id}`),
+    patchOrder: (id: string, data: { custom_price?: string; custom_expires_at?: string; admin_note?: string }) =>
+        api.patch(`/v1/proxy/orders/${id}`, data),
     getCredentials: (id: string) => api.get(`/v1/proxy/orders/${id}/credentials`),
     serviceOptions: (serviceId: string, planId?: string) =>
         api.get(`/v1/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),

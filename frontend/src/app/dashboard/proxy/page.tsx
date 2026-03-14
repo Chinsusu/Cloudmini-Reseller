@@ -368,9 +368,101 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
     )
 }
 
+// ─── Edit Order Modal ──────────────────────────────────────────────────────────
+function EditOrderModal({ order, onClose, onSaved }: { order: any; onClose: () => void; onSaved: () => void }) {
+    const { success, error: toastError } = useToast()
+    const [price, setPrice] = useState(order.custom_price ?? order.unit_price ?? '')
+    const [expiry, setExpiry] = useState(
+        order.custom_expires_at
+            ? new Date(order.custom_expires_at).toISOString().slice(0, 16)
+            : order.expires_at
+                ? new Date(order.expires_at).toISOString().slice(0, 16)
+                : ''
+    )
+    const [note, setNote] = useState(order.admin_note ?? '')
+    const [saving, setSaving] = useState(false)
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            await proxyAPI.patchOrder(order.id, {
+                custom_price: price ? String(price) : undefined,
+                custom_expires_at: expiry ? new Date(expiry).toISOString() : undefined,
+                admin_note: note || undefined,
+            })
+            success('Đã cập nhật đơn hàng')
+            onSaved()
+            onClose()
+        } catch (err: any) {
+            toastError(err?.response?.data?.error?.message ?? 'Cập nhật thất bại')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={onClose}>
+            <div style={{
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-xl)', padding: '1.5rem', width: 400, maxWidth: '95vw',
+            }} onClick={e => e.stopPropagation()}>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-heading)', marginBottom: '1.25rem' }}>
+                    ✏️ Sửa đơn hàng
+                    <div style={{ fontSize: '.75rem', color: 'var(--text-muted)', fontWeight: 400, marginTop: 2 }}>{order.order_number}</div>
+                </div>
+
+                <div className="form-group">
+                    <label>Giá tuỳ chỉnh (VND) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(áp dụng khi gia hạn)</span></label>
+                    <input className="input" type="number" min={0} step={1000}
+                        value={price} onChange={e => setPrice(e.target.value)}
+                        placeholder={`Mặc định: ${Number(order.unit_price).toLocaleString('vi-VN')}đ`} />
+                </div>
+
+                <div className="form-group">
+                    <label>Ngày hết hạn tuỳ chỉnh</label>
+                    <input className="input" type="datetime-local"
+                        value={expiry} onChange={e => setExpiry(e.target.value)} />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                    <label>Ghi chú</label>
+                    <input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú tuỳ chọn..." />
+                </div>
+
+                <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end' }}>
+                    <button onClick={onClose} style={{
+                        padding: '.5rem 1.1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+                        background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600,
+                    }}>Huỷ</button>
+                    <button onClick={handleSave} disabled={saving} style={{
+                        padding: '.5rem 1.25rem', border: 'none', borderRadius: 'var(--radius)',
+                        background: 'var(--dc-gold)', color: 'var(--dc-gold-text)', cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700,
+                    }}>
+                        {saving ? 'Đang lưu...' : 'Lưu'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Time remaining helper ─────────────────────────────────────────────────────
+function timeRemaining(dateStr: string): { text: string; urgent: boolean } {
+    const diff = new Date(dateStr).getTime() - Date.now()
+    if (diff <= 0) return { text: 'Expired', urgent: true }
+    const days = Math.floor(diff / 86400000)
+    const hrs  = Math.floor((diff % 86400000) / 3600000)
+    if (days > 0) return { text: `${days}d ${hrs}h`, urgent: days <= 3 }
+    return { text: `${hrs}h`, urgent: true }
+}
+
 // ─── Orders Table ─────────────────────────────────────────────────────────────
-function OrdersTable({ orders, onCancel }: { orders: any[]; onCancel: (id: string, num: string) => void }) {
+function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel: (id: string, num: string) => void; onRefresh: () => void }) {
     const [revealed, setRevealed] = useState<Record<string, any>>({})
+    const [editOrder, setEditOrder] = useState<any>(null)
     const { success, error: toastError } = useToast()
 
     const revealMut = useMutation({
@@ -379,87 +471,153 @@ function OrdersTable({ orders, onCancel }: { orders: any[]; onCancel: (id: strin
         onError: () => toastError('Failed to load credentials'),
     })
 
-    const handleCopy = async (id: string) => {
-        const c = revealed[id]
-        if (!c) return
-        await navigator.clipboard.writeText(`${c.username}:${c.password}@${c.host}:${c.port}`)
-        success('Credentials copied!')
+    const handleCopy = async (text: string) => {
+        await navigator.clipboard.writeText(text)
+        success('Đã sao chép!')
     }
 
     if (orders.length === 0) return null
 
+    // effective expiry: custom_expires_at overrides expires_at
+    const effectiveExpiry = (o: any) => o.custom_expires_at || o.expires_at
+
     return (
-        <div className="card" style={{ padding: 0 }}>
-            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-                <Package size={16} color="var(--dc-gold)" />
-                <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>My Orders</span>
-                <span className="badge badge-secondary" style={{ marginLeft: '.25rem' }}>{orders.length}</span>
-            </div>
-            <div className="table-wrapper">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>Type</th>
-                            <th>Qty</th>
-                            <th>Amount</th>
-                            <th>Expires</th>
-                            <th>Status</th>
-                            <th>Credentials</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {orders.map((o: any) => {
-                            const st = STATUS[o.status] ?? { label: o.status, cls: 'badge-secondary' }
-                            return (
-                                <tr key={o.id}>
-                                    <td>
-                                        <code style={{ fontSize: '.78rem', background: 'rgba(255,255,255,.06)', padding: '.15rem .45rem', borderRadius: 4, color: 'var(--text-heading)' }}>{o.order_number}</code>
-                                        {o.product_name && <div style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{o.product_name}</div>}
-                                    </td>
-                                    <td><span className="badge badge-info">{o.proxy_type ?? '—'}</span></td>
-                                    <td style={{ fontWeight: 600 }}>{o.quantity}</td>
-                                    <td><strong>{formatVND(o.total_amount)}</strong></td>
-                                    <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>
-                                        {o.expires_at ? new Date(o.expires_at).toLocaleDateString() : '—'}
-                                    </td>
-                                    <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
-                                    <td>
-                                        {o.status === 'active' ? (
-                                            revealed[o.id] ? (
-                                                <div style={{ display: 'flex', gap: '.35rem', alignItems: 'center' }}>
-                                                    <code style={{ fontSize: '.73rem', background: 'rgba(255,255,255,.06)', padding: '.15rem .4rem', borderRadius: 4, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-heading)' }}>
-                                                        {revealed[o.id].username}:•••@{revealed[o.id].host}
+        <>
+            {editOrder && (
+                <EditOrderModal
+                    order={editOrder}
+                    onClose={() => setEditOrder(null)}
+                    onSaved={onRefresh}
+                />
+            )}
+            <div className="card" style={{ padding: 0 }}>
+                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                    <Package size={16} color="var(--dc-gold)" />
+                    <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>My Orders</span>
+                    <span className="badge badge-secondary" style={{ marginLeft: '.25rem' }}>{orders.length}</span>
+                </div>
+                <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+                    <table className="data-table" style={{ minWidth: 900 }}>
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Status</th>
+                                <th>Qty</th>
+                                <th>Amount</th>
+                                <th>Host:Port</th>
+                                <th>User</th>
+                                <th>Password</th>
+                                <th>Expires At</th>
+                                <th>Time Left</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {orders.map((o: any) => {
+                                const st = STATUS[o.status] ?? { label: o.status, cls: 'badge-secondary' }
+                                const exp = effectiveExpiry(o)
+                                const tr = exp ? timeRemaining(exp) : null
+                                const creds = revealed[o.id]
+                                const isActive = o.status === 'active'
+                                const isFailed = o.status === 'failed'
+                                const effectivePrice = o.custom_price ?? o.unit_price
+                                return (
+                                    <tr key={o.id} style={{ opacity: isFailed ? .6 : 1 }}>
+                                        <td>
+                                            <code style={{ fontSize: '.78rem', background: 'rgba(255,255,255,.06)', padding: '.15rem .45rem', borderRadius: 4, color: 'var(--text-heading)' }}>{o.order_number}</code>
+                                            {o.admin_note && <div style={{ fontSize: '.72rem', color: 'var(--warning)', marginTop: 2 }}>📝 {o.admin_note}</div>}
+                                        </td>
+                                        <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
+                                        <td style={{ fontWeight: 600 }}>{o.quantity}</td>
+                                        <td>
+                                            <strong>{Number(effectivePrice).toLocaleString('vi-VN')}đ</strong>
+                                            {o.custom_price && <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{Number(o.unit_price).toLocaleString('vi-VN')}đ</div>}
+                                        </td>
+
+                                        {/* Host:Port */}
+                                        <td>
+                                            {isActive && creds ? (
+                                                <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
+                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)' }}>
+                                                        {creds.host}:{creds.port}
                                                     </code>
-                                                    <button className="action-btn blue" onClick={() => handleCopy(o.id)} title="Copy"><Copy size={11} /></button>
-                                                    <button className="action-btn gray" onClick={() => setRevealed(p => { const n = { ...p }; delete n[o.id]; return n })}><EyeOff size={11} /></button>
+                                                    <button className="action-btn blue" onClick={() => handleCopy(`${creds.host}:${creds.port}`)} title="Copy"><Copy size={10} /></button>
                                                 </div>
-                                            ) : (
-                                                <button className="action-btn purple" onClick={() => revealMut.mutate(o.id)} disabled={revealMut.isPending}>
-                                                    <Eye size={12} /> View
+                                            ) : isActive ? (
+                                                <button className="action-btn purple" onClick={() => revealMut.mutate(o.id)} disabled={revealMut.isPending} style={{ fontSize: '.72rem' }}>
+                                                    <Eye size={11} /> Show
                                                 </button>
-                                            )
-                                        ) : o.status === 'processing' ? (
-                                            <span style={{ fontSize: '.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-                                                <div className="pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--warning)', flexShrink: 0 }} /> Activating...
-                                            </span>
-                                        ) : '—'}
-                                    </td>
-                                    <td>
-                                        {(o.status === 'active' || o.status === 'pending') && (
-                                            <button className="action-btn red" onClick={() => onCancel(o.id, o.order_number)}>
-                                                <XCircle size={12} /> Cancel
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                        </td>
+
+                                        {/* Username */}
+                                        <td>
+                                            {isActive && creds ? (
+                                                <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
+                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{creds.username}</code>
+                                                    <button className="action-btn blue" onClick={() => handleCopy(creds.username)} title="Copy"><Copy size={10} /></button>
+                                                </div>
+                                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                        </td>
+
+                                        {/* Password */}
+                                        <td>
+                                            {isActive && creds ? (
+                                                <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
+                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>••••••</code>
+                                                    <button className="action-btn blue" onClick={() => handleCopy(creds.password)} title="Copy password"><Copy size={10} /></button>
+                                                </div>
+                                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                        </td>
+
+                                        {/* Expires At */}
+                                        <td style={{ color: 'var(--text-muted)', fontSize: '.82rem', whiteSpace: 'nowrap' }}>
+                                            {exp
+                                                ? <>{new Date(exp).toLocaleDateString('vi-VN')}<br /><span style={{ fontSize: '.72rem' }}>{new Date(exp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span></>
+                                                : '—'}
+                                            {o.custom_expires_at && o.expires_at && o.custom_expires_at !== o.expires_at && (
+                                                <div style={{ fontSize: '.68rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{new Date(o.expires_at).toLocaleDateString('vi-VN')}</div>
+                                            )}
+                                        </td>
+
+                                        {/* Time Left */}
+                                        <td style={{ whiteSpace: 'nowrap' }}>
+                                            {tr ? (
+                                                <span style={{ fontSize: '.8rem', fontWeight: 600, color: tr.urgent ? 'var(--error)' : 'var(--success)' }}>
+                                                    {tr.urgent && '⚠️ '}{tr.text}
+                                                </span>
+                                            ) : '—'}
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td>
+                                            <div style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap' }}>
+                                                {!isFailed && (
+                                                    <button className="action-btn" style={{ background: 'rgba(139,92,246,.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,.3)' }}
+                                                        onClick={() => setEditOrder(o)} title="Sửa">
+                                                        ✏️
+                                                    </button>
+                                                )}
+                                                {isActive && creds && (
+                                                    <button className="action-btn gray" onClick={() => setRevealed(p => { const n = { ...p }; delete n[o.id]; return n })} title="Ẩn">
+                                                        <EyeOff size={11} />
+                                                    </button>
+                                                )}
+                                                {(o.status === 'active' || o.status === 'pending') && (
+                                                    <button className="action-btn red" onClick={() => onCancel(o.id, o.order_number)}>
+                                                        <XCircle size={12} /> Cancel
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        </>
     )
 }
 
@@ -631,7 +789,7 @@ export default function ProxyOrdersPage() {
                         </div>
                     ) : (
                         <>
-                            <OrdersTable orders={orders} onCancel={handleCancel} />
+                            <OrdersTable orders={orders} onCancel={handleCancel} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} />
                             {orders.length > 0 && (
                                 <Pagination page={page} totalPages={meta.pages ?? 1} total={meta.total ?? 0} limit={20} onPageChange={setPage} />
                             )}

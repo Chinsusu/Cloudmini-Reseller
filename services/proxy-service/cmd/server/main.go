@@ -110,7 +110,7 @@ func main() {
 
 	// ── HTTP ──────────────────────────────────────────────────────────────────
 	auditLogger := mw.NewNATSAuditLogger(natsPub, "proxy-service")
-	handler := httphandler.NewHandler(orderUC, productRepo, providerRepo, webhookHTTP, log)
+	handler := httphandler.NewHandler(orderUC, orderRepo, productRepo, providerRepo, webhookHTTP, log)
 	if proxyCheapAPIKey != "" && proxyCheapAPISecret != "" {
 		pcClient := proxycheap.NewClient(proxyCheapAPIKey, proxyCheapAPISecret)
 		handler.WithProxyCheapClient(pcClient)
