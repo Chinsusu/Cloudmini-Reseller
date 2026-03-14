@@ -73,7 +73,9 @@ func main() {
 
 	// ── Provider registry ────────────────────────────────────────────────────
 	registry := providers.NewRegistry()
-	registry.Register("sandbox-provider-uuid", providers.NewSandboxAdapter())
+	// Sandbox adapter — always registered for dev/test. UUID matches proxy.providers row.
+	registry.Register("a1000000-0000-0000-0000-000000000001", providers.NewSandboxAdapter())
+	log.Info("sandbox adapter registered")
 
 	if proxyCheapAPIKey != "" && proxyCheapAPISecret != "" {
 		pcAdapter := proxycheap.NewAdapter(proxycheap.Config{
