@@ -31,7 +31,7 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 
 func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
 	var o domain.Order
-	if err := r.db.GetContext(ctx, &o, `SELECT * FROM proxy.orders WHERE id=$1`, id); err != nil {
+	if err := r.db.GetContext(ctx, &o, orderSelectCOALESCE+` WHERE id=$1`, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrOrderNotFound
 		}
@@ -40,9 +40,20 @@ func (r *OrderRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Or
 	return &o, nil
 }
 
+// orderSelectCOALESCE is the safe SELECT for order rows — handles nullable text columns.
+const orderSelectCOALESCE = `SELECT
+	id, order_number, user_id, reseller_id, product_id, provider_id, status, quantity,
+	unit_price, total_amount,
+	COALESCE(provider_order_id,'') AS provider_order_id,
+	COALESCE(credentials,'')       AS credentials,
+	activated_at, expires_at, cancelled_at,
+	COALESCE(cancel_reason,'')     AS cancel_reason,
+	idempotency_key, request_id, created_at, updated_at
+	FROM proxy.orders`
+
 func (r *OrderRepository) GetByIdempotencyKey(ctx context.Context, key string) (*domain.Order, error) {
 	var o domain.Order
-	if err := r.db.GetContext(ctx, &o, `SELECT * FROM proxy.orders WHERE idempotency_key=$1`, key); err != nil {
+	if err := r.db.GetContext(ctx, &o, orderSelectCOALESCE+` WHERE idempotency_key=$1`, key); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrOrderNotFound
 		}
@@ -54,7 +65,7 @@ func (r *OrderRepository) GetByIdempotencyKey(ctx context.Context, key string) (
 func (r *OrderRepository) GetByProviderOrderID(ctx context.Context, providerOrderID string) (*domain.Order, error) {
 	var o domain.Order
 	if err := r.db.GetContext(ctx, &o,
-		`SELECT * FROM proxy.orders WHERE provider_order_id=$1 LIMIT 1`, providerOrderID,
+		orderSelectCOALESCE+` WHERE provider_order_id=$1 LIMIT 1`, providerOrderID,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrOrderNotFound
@@ -100,7 +111,7 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, offs
 	}
 	var orders []*domain.Order
 	if err := r.db.SelectContext(ctx, &orders,
-		`SELECT * FROM proxy.orders WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		orderSelectCOALESCE+` WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
 		userID, limit, offset,
 	); err != nil {
 		return nil, 0, fmt.Errorf("OrderRepository.ListByUser: select: %w", err)
@@ -112,7 +123,7 @@ func (r *OrderRepository) ListExpiring(ctx context.Context, within time.Duration
 	cutoff := time.Now().Add(within)
 	var orders []*domain.Order
 	if err := r.db.SelectContext(ctx, &orders,
-		`SELECT * FROM proxy.orders WHERE status='active' AND expires_at IS NOT NULL AND expires_at < $1`, cutoff,
+		orderSelectCOALESCE+` WHERE status='active' AND expires_at IS NOT NULL AND expires_at < $1`, cutoff,
 	); err != nil {
 		return nil, fmt.Errorf("OrderRepository.ListExpiring: %w", err)
 	}

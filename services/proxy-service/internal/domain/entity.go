@@ -53,26 +53,26 @@ type Product struct {
 
 // Order entity.
 type Order struct {
-	ID               uuid.UUID       `db:"id"`
-	OrderNumber      string          `db:"order_number"`
-	UserID           uuid.UUID       `db:"user_id"`
-	ResellerID       *uuid.UUID      `db:"reseller_id"`
-	ProductID        uuid.UUID       `db:"product_id"`
-	ProviderID       uuid.UUID       `db:"provider_id"`
-	Status           string          `db:"status"`
-	Quantity         int             `db:"quantity"`
-	UnitPrice        decimal.Decimal `db:"unit_price"`
-	TotalAmount      decimal.Decimal `db:"total_amount"`
-	ProviderOrderID  string          `db:"provider_order_id"`
-	Credentials      string          `db:"credentials"` // AES-256-GCM encrypted JSON
-	ActivatedAt      *time.Time      `db:"activated_at"`
-	ExpiresAt        *time.Time      `db:"expires_at"`
-	CancelledAt      *time.Time      `db:"cancelled_at"`
-	CancelReason     string          `db:"cancel_reason"`
-	IdempotencyKey   string          `db:"idempotency_key"`
-	RequestID        *uuid.UUID      `db:"request_id"`
-	CreatedAt        time.Time       `db:"created_at"`
-	UpdatedAt        time.Time       `db:"updated_at"`
+	ID               uuid.UUID       `db:"id"               json:"id"`
+	OrderNumber      string          `db:"order_number"     json:"order_number"`
+	UserID           uuid.UUID       `db:"user_id"          json:"user_id"`
+	ResellerID       *uuid.UUID      `db:"reseller_id"      json:"reseller_id,omitempty"`
+	ProductID        uuid.UUID       `db:"product_id"       json:"product_id"`
+	ProviderID       uuid.UUID       `db:"provider_id"      json:"provider_id"`
+	Status           string          `db:"status"           json:"status"`
+	Quantity         int             `db:"quantity"         json:"quantity"`
+	UnitPrice        decimal.Decimal `db:"unit_price"       json:"unit_price"`
+	TotalAmount      decimal.Decimal `db:"total_amount"     json:"total_amount"`
+	ProviderOrderID  string          `db:"provider_order_id" json:"provider_order_id,omitempty"`
+	Credentials      string          `db:"credentials"       json:"-"` // never expose encrypted creds
+	ActivatedAt      *time.Time      `db:"activated_at"     json:"activated_at,omitempty"`
+	ExpiresAt        *time.Time      `db:"expires_at"       json:"expires_at,omitempty"`
+	CancelledAt      *time.Time      `db:"cancelled_at"     json:"cancelled_at,omitempty"`
+	CancelReason     string          `db:"cancel_reason"    json:"cancel_reason,omitempty"`
+	IdempotencyKey   string          `db:"idempotency_key"  json:"-"` // internal
+	RequestID        *uuid.UUID      `db:"request_id"       json:"-"` // internal
+	CreatedAt        time.Time       `db:"created_at"       json:"created_at"`
+	UpdatedAt        time.Time       `db:"updated_at"       json:"updated_at"`
 }
 
 // ─── Repository Interfaces ────────────────────────────────────────────────────

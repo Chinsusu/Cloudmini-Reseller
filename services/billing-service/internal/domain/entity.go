@@ -4,11 +4,49 @@ package domain
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
+
+// ─── Custom Types ─────────────────────────────────────────────────────────────
+
+// JSONMap is a map[string]any that can be scanned from a Postgres jsonb column.
+type JSONMap map[string]any
+
+func (m *JSONMap) Scan(src any) error {
+	if src == nil {
+		*m = nil
+		return nil
+	}
+	var b []byte
+	switch v := src.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		return fmt.Errorf("JSONMap.Scan: unsupported type %T", src)
+	}
+	return json.Unmarshal(b, m)
+}
+
+func (m JSONMap) Value() (driver.Value, error) {
+	if m == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
+}
+
+
 
 // ─── Entities ────────────────────────────────────────────────────────────────
 
@@ -54,7 +92,7 @@ type Transaction struct {
 	ReferenceType string          `db:"reference_type" json:"reference_type"`
 	ReferenceID   *uuid.UUID      `db:"reference_id"   json:"reference_id,omitempty"`
 	Description   string          `db:"description"    json:"description"`
-	Metadata      map[string]any  `db:"metadata"       json:"metadata,omitempty"`
+	Metadata      JSONMap         `db:"metadata"       json:"metadata,omitempty"`
 	RequestID     *uuid.UUID      `db:"request_id"     json:"request_id,omitempty"`
 	CreatedAt     time.Time       `db:"created_at"     json:"created_at"`
 }

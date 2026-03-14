@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -98,7 +99,10 @@ func (c *HTTPBillingClient) postWithResponse(ctx context.Context, path string, b
 		return nil, fmt.Errorf("HTTPBillingClient %s: status %d", path, resp.StatusCode)
 	}
 
-	var buf strings.Builder
-	_, _ = fmt.Fscan(resp.Body, &buf)
-	return []byte(buf.String()), nil
+	// Use io.ReadAll to read the complete response body (not fmt.Fscan which truncates at whitespace)
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPBillingClient %s: read body: %w", path, err)
+	}
+	return buf, nil
 }
