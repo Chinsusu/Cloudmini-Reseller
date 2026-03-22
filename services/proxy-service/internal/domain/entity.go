@@ -90,11 +90,39 @@ type IProviderRepository interface {
 type IProductRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Product, error)
 	List(ctx context.Context, proxyType, protocol, location string, offset, limit int) ([]*Product, int, error)
-	AdminList(ctx context.Context, offset, limit int) ([]*Product, int, error) // all products, no is_active filter
+	AdminList(ctx context.Context, offset, limit int) ([]*Product, int, error)
 	Create(ctx context.Context, p *Product) error
 	Update(ctx context.Context, p *Product) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ToggleActive(ctx context.Context, id uuid.UUID) error
+}
+
+// ─── Order Event ──────────────────────────────────────────────────────────────
+
+// Event type constants for proxy order lifecycle.
+const (
+	EventOrderCreated   = "order.created"
+	EventOrderActivated = "order.activated"
+	EventOrderCancelled = "order.cancelled"
+	EventOrderPatched   = "order.patched"
+	EventOrderFailed    = "order.failed"
+)
+
+// OrderEvent records an action taken on a proxy order.
+type OrderEvent struct {
+	ID        uuid.UUID       `db:"id"         json:"id"`
+	OrderID   uuid.UUID       `db:"order_id"   json:"order_id"`
+	EventType string          `db:"event_type" json:"event_type"`
+	Payload   json.RawMessage `db:"payload"    json:"payload,omitempty"`
+	CreatedAt time.Time       `db:"created_at" json:"created_at"`
+}
+
+// IOrderEventRepository persist and retrieves order events.
+type IOrderEventRepository interface {
+	// Log writes an event for the given order. payload may be nil.
+	Log(ctx context.Context, orderID uuid.UUID, eventType string, payload map[string]any) error
+	// ListByOrder returns all events for an order, oldest first.
+	ListByOrder(ctx context.Context, orderID uuid.UUID) ([]*OrderEvent, error)
 }
 
 // IOrderRepository manages proxy orders.

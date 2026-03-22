@@ -22,15 +22,16 @@ import (
 type Handler struct {
 	orderUC          *usecase.OrderUsecase
 	orderRepo        domain.IOrderRepository
+	orderEvtRepo     domain.IOrderEventRepository
 	productRepo      domain.IProductRepository
 	providerRepo     domain.IProviderRepository
-	webhookHandler   http.Handler // Proxy-Cheap webhook receiver
-	proxyCheapClient *proxycheap.Client // optional — nil if adapter not configured
+	webhookHandler   http.Handler
+	proxyCheapClient *proxycheap.Client
 	logger           *slog.Logger
 }
 
-func NewHandler(orderUC *usecase.OrderUsecase, orderRepo domain.IOrderRepository, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
-	return &Handler{orderUC: orderUC, orderRepo: orderRepo, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
+func NewHandler(orderUC *usecase.OrderUsecase, orderRepo domain.IOrderRepository, orderEvtRepo domain.IOrderEventRepository, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
+	return &Handler{orderUC: orderUC, orderRepo: orderRepo, orderEvtRepo: orderEvtRepo, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
 }
 
 // WithProxyCheapClient injects the proxy-cheap client into the handler (for service-options endpoint).
@@ -180,7 +181,37 @@ func (h *Handler) PatchOrder(w http.ResponseWriter, r *http.Request) {
 		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
 		return
 	}
+	// Log order.patched event
+	payload := map[string]any{}
+	if req.CustomPrice != nil {
+		payload["custom_price"] = *req.CustomPrice
+	}
+	if req.CustomExpiresAt != nil {
+		payload["custom_expires_at"] = *req.CustomExpiresAt
+	}
+	if req.AdminNote != "" {
+		payload["admin_note"] = req.AdminNote
+	}
+	_ = h.orderEvtRepo.Log(r.Context(), orderID, domain.EventOrderPatched, payload)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetOrderEvents handles GET /api/v1/proxy/orders/{id}/events
+func (h *Handler) GetOrderEvents(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	orderID := mustParseUUID(chi.URLParam(r, "id"))
+	// Verify ownership
+	if _, err := h.orderUC.GetOrder(r.Context(), orderID, userID); err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	events, err := h.orderEvtRepo.ListByOrder(r.Context(), orderID)
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "GetOrderEvents error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, events)
 }
 
 // ─── Admin Routes ─────────────────────────────────────────────────────────────
@@ -379,8 +410,9 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Post("/orders", h.CreateOrder)
 				r.Get("/orders/{id}", h.GetOrder)
 				r.Patch("/orders/{id}", h.PatchOrder)
-				r.Delete("/orders/{id}", h.CancelOrder)
+			r.Delete("/orders/{id}", h.CancelOrder)
 				r.Get("/orders/{id}/credentials", h.GetCredentials)
+				r.Get("/orders/{id}/events", h.GetOrderEvents)
 		})
 
 		// Admin endpoints

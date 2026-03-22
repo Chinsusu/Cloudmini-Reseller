@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { proxyAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -9,7 +9,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import {
     ShoppingCart, Eye, EyeOff, Copy, XCircle, RefreshCw,
     Globe, Clock, Database, ChevronRight, CheckCircle2,
-    Package, Zap, ArrowLeft, Loader2
+    Package, Zap, ArrowLeft, Loader2, History
 } from 'lucide-react'
 import { formatVND } from '@/lib/format'
 
@@ -459,22 +459,159 @@ function timeRemaining(dateStr: string): { text: string; urgent: boolean } {
     return { text: `${hrs}h`, urgent: true }
 }
 
-// ─── Orders Table ─────────────────────────────────────────────────────────────
-function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel: (id: string, num: string) => void; onRefresh: () => void }) {
+// ─── Order Event Modal ─────────────────────────────────────────────────────────
+const EVT_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
+    'order.created':   { icon: '📦', color: 'var(--dc-gold)',  label: 'Tạo đơn' },
+    'order.activated': { icon: '✅', color: 'var(--success)',  label: 'Kích hoạt' },
+    'order.cancelled': { icon: '🚫', color: 'var(--error)',    label: 'Huỷ đơn' },
+    'order.patched':   { icon: '✏️', color: '#a78bfa',         label: 'Chỉnh sửa' },
+    'order.failed':    { icon: '❌', color: 'var(--error)',    label: 'Thất bại' },
+}
+
+function OrderEventModal({ order, onClose }: { order: any; onClose: () => void }) {
+    const { data, isLoading } = useQuery({
+        queryKey: ['order-events', order.id],
+        queryFn: () => proxyAPI.getOrderEvents(order.id),
+        staleTime: 10_000,
+    })
+    const events: any[] = data?.data?.data ?? data?.data ?? []
+
+    const fmt = (ts: string) => {
+        const d = new Date(ts)
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, zIndex: 1100,
+            background: 'rgba(0,0,0,.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={onClose}>
+            <div style={{
+                background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-xl)', padding: '1.5rem', width: 480, maxWidth: '95vw', maxHeight: '80vh',
+                display: 'flex', flexDirection: 'column',
+            }} onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '1.25rem' }}>
+                    <History size={18} color="var(--dc-gold)" />
+                    <div>
+                        <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text-heading)' }}>Lịch sử đơn hàng</div>
+                        <div style={{ fontSize: '.75rem', color: 'var(--text-muted)' }}>{order.order_number}</div>
+                    </div>
+                    <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem' }}>✕</button>
+                </div>
+
+                {/* Timeline */}
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                    {isLoading ? (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Đang tải...</div>
+                    ) : events.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Chưa có lịch sử</div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                            {events.map((ev: any, i: number) => {
+                                const cfg = EVT_CONFIG[ev.event_type] ?? { icon: '🔹', color: 'var(--text-muted)', label: ev.event_type }
+                                const payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : {}
+                                const isLast = i === events.length - 1
+                                return (
+                                    <div key={ev.id} style={{ display: 'flex', gap: '.75rem', paddingBottom: isLast ? 0 : '.75rem' }}>
+                                        {/* Dot + line */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 28, flexShrink: 0 }}>
+                                            <div style={{
+                                                width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center',
+                                                background: cfg.color + '22', border: `2px solid ${cfg.color}`, fontSize: '.85rem', flexShrink: 0,
+                                            }}>{cfg.icon}</div>
+                                            {!isLast && <div style={{ width: 2, flex: 1, background: 'var(--border-light)', marginTop: 4 }} />}
+                                        </div>
+                                        {/* Content */}
+                                        <div style={{ paddingBottom: '.75rem', flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '.5rem' }}>
+                                                <span style={{ fontWeight: 700, color: cfg.color, fontSize: '.88rem' }}>{cfg.label}</span>
+                                                <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>{fmt(ev.created_at)}</span>
+                                            </div>
+                                            {Object.entries(payload).filter(([,v]) => v).map(([k, v]) => (
+                                                <div key={k} style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                                    <span style={{ textTransform: 'capitalize' }}>{k.replace(/_/g,' ')}</span>: <span style={{ color: 'var(--text-heading)', fontFamily: 'monospace' }}>{String(v)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Orders Table ───────────────────────────────────────────────────────────────────
+const LIMIT_OPTIONS = [10, 20, 50, 100, 9999]
+function OrdersTable({ orders, onCancel, onRefresh, limit, onLimitChange }: {
+    orders: any[]; onCancel: (id: string, num: string) => void; onRefresh: () => void
+    limit: number; onLimitChange: (n: number) => void
+}) {
     const [revealed, setRevealed] = useState<Record<string, any>>({})
     const [editOrder, setEditOrder] = useState<any>(null)
+    const [historyOrder, setHistoryOrder] = useState<any>(null)
     const { success, error: toastError } = useToast()
 
-    const revealMut = useMutation({
-        mutationFn: (id: string) => proxyAPI.getCredentials(id),
-        onSuccess: (res, id) => setRevealed(prev => ({ ...prev, [id]: res.data?.data })),
-        onError: () => toastError('Failed to load credentials'),
-    })
+    // Auto-load credentials for all active orders
+    const activeOrders = orders.filter(o => o.status === 'active')
+    useEffect(() => {
+        activeOrders.forEach(o => {
+            if (!revealed[o.id]) {
+                proxyAPI.getCredentials(o.id)
+                    .then(res => {
+                        const data = res.data?.data
+                        if (data) setRevealed(prev => ({ ...prev, [o.id]: data }))
+                    })
+                    .catch(() => {}) // silent — creds may not exist yet
+            }
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [orders.length])
 
     const handleCopy = async (text: string) => {
-        await navigator.clipboard.writeText(text)
-        success('Đã sao chép!')
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text)
+            } else {
+                // Fallback for HTTP / non-secure contexts
+                const el = document.createElement('textarea')
+                el.value = text
+                el.style.position = 'fixed'
+                el.style.opacity = '0'
+                document.body.appendChild(el)
+                el.select()
+                document.execCommand('copy')
+                document.body.removeChild(el)
+            }
+            success('Đã sao chép!')
+        } catch {
+            toastError('Không thể sao chép')
+        }
     }
+
+    const Chip = ({ value, title }: { value: string; title?: string }) => (
+        <span
+            title={title ?? `Click to copy: ${value}`}
+            onClick={() => handleCopy(value)}
+            style={{
+                display: 'inline-block', cursor: 'pointer',
+                fontSize: '.76rem', background: 'rgba(255,255,255,.06)',
+                padding: '.1rem .4rem', borderRadius: 3,
+                color: 'var(--text-heading)', fontFamily: 'monospace',
+                border: '1px solid transparent', transition: 'border-color .12s',
+                whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.borderColor = 'rgba(230,168,23,.4)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = 'transparent'}
+        >
+            {value}
+        </span>
+    )
 
     if (orders.length === 0) return null
 
@@ -490,19 +627,39 @@ function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel:
                     onSaved={onRefresh}
                 />
             )}
+            {historyOrder && (
+                <OrderEventModal
+                    order={historyOrder}
+                    onClose={() => setHistoryOrder(null)}
+                />
+            )}
             <div className="card" style={{ padding: 0 }}>
-                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-                    <Package size={16} color="var(--dc-gold)" />
-                    <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>My Orders</span>
-                    <span className="badge badge-secondary" style={{ marginLeft: '.25rem' }}>{orders.length}</span>
+                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+                    {/* Show [N▼] selector — left side */}
+                    <span style={{ fontSize: '.85rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Hiện</span>
+                    <select
+                        value={limit}
+                        onChange={e => onLimitChange(Number(e.target.value))}
+                        style={{
+                            background: 'var(--surface-raised)', border: '1px solid var(--border)',
+                            borderRadius: 'var(--radius)', color: 'var(--text-heading)',
+                            padding: '.25rem .6rem', fontSize: '.85rem', cursor: 'pointer', fontWeight: 600,
+                        }}
+                    >
+                        {LIMIT_OPTIONS.map(o => (
+                            <option key={o} value={o}>{o === 9999 ? 'Tất cả' : o}</option>
+                        ))}
+                    </select>
+                    <Package size={15} color="var(--dc-gold)" style={{ marginLeft: 'auto' }} />
+                    <span style={{ fontWeight: 600, color: 'var(--text-heading)' }}>Proxy của tôi</span>
+                    <span className="badge badge-secondary">{orders.length}</span>
                 </div>
                 <div className="table-wrapper" style={{ overflowX: 'auto' }}>
                     <table className="data-table" style={{ minWidth: 900 }}>
                         <thead>
                             <tr>
-                                <th>Order</th>
+                                <th>ID</th>
                                 <th>Status</th>
-                                <th>Qty</th>
                                 <th>Amount</th>
                                 <th>Host:Port</th>
                                 <th>User</th>
@@ -528,7 +685,6 @@ function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel:
                                             {o.admin_note && <div style={{ fontSize: '.72rem', color: 'var(--warning)', marginTop: 2 }}>📝 {o.admin_note}</div>}
                                         </td>
                                         <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
-                                        <td style={{ fontWeight: 600 }}>{o.quantity}</td>
                                         <td>
                                             <strong>{Number(effectivePrice).toLocaleString('vi-VN')}đ</strong>
                                             {o.custom_price && <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{Number(o.unit_price).toLocaleString('vi-VN')}đ</div>}
@@ -538,35 +694,24 @@ function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel:
                                         <td>
                                             {isActive && creds ? (
                                                 <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
-                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)' }}>
-                                                        {creds.host}:{creds.port}
-                                                    </code>
-                                                    <button className="action-btn blue" onClick={() => handleCopy(`${creds.host}:${creds.port}`)} title="Copy"><Copy size={10} /></button>
+                                                    <Chip value={`${creds.host}:${creds.port}`} title="Click to copy host:port" />
                                                 </div>
                                             ) : isActive ? (
-                                                <button className="action-btn purple" onClick={() => revealMut.mutate(o.id)} disabled={revealMut.isPending} style={{ fontSize: '.72rem' }}>
-                                                    <Eye size={11} /> Show
-                                                </button>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: '.75rem' }}>Loading...</span>
                                             ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                         </td>
 
                                         {/* Username */}
                                         <td>
-                                            {isActive && creds ? (
-                                                <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
-                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{creds.username}</code>
-                                                    <button className="action-btn blue" onClick={() => handleCopy(creds.username)} title="Copy"><Copy size={10} /></button>
-                                                </div>
-                                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                                            {isActive && creds
+                                                ? <Chip value={creds.username} title="Click to copy username" />
+                                                : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                         </td>
 
                                         {/* Password */}
                                         <td>
                                             {isActive && creds ? (
-                                                <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
-                                                    <code style={{ fontSize: '.76rem', background: 'rgba(255,255,255,.06)', padding: '.1rem .35rem', borderRadius: 3, color: 'var(--text-heading)', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>••••••</code>
-                                                    <button className="action-btn blue" onClick={() => handleCopy(creds.password)} title="Copy password"><Copy size={10} /></button>
-                                                </div>
+                                                <Chip value={creds.password} title="Click to copy password (hidden)" />
                                             ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                                         </td>
 
@@ -592,6 +737,10 @@ function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel:
                                         {/* Actions */}
                                         <td>
                                             <div style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap' }}>
+                                                <button className="action-btn" style={{ background: 'rgba(230,168,23,.12)', color: 'var(--dc-gold)', border: '1px solid rgba(230,168,23,.3)' }}
+                                                    onClick={() => setHistoryOrder(o)} title="Lịch sử">
+                                                    <History size={11} />
+                                                </button>
                                                 {!isFailed && (
                                                     <button className="action-btn" style={{ background: 'rgba(139,92,246,.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,.3)' }}
                                                         onClick={() => setEditOrder(o)} title="Sửa">
@@ -599,8 +748,9 @@ function OrdersTable({ orders, onCancel, onRefresh }: { orders: any[]; onCancel:
                                                     </button>
                                                 )}
                                                 {isActive && creds && (
-                                                    <button className="action-btn gray" onClick={() => setRevealed(p => { const n = { ...p }; delete n[o.id]; return n })} title="Ẩn">
-                                                        <EyeOff size={11} />
+                                                    <button className="action-btn blue" style={{ fontSize: '.72rem' }}
+                                                        onClick={() => handleCopy(`${creds.host}:${creds.port}@${creds.username}:${creds.password}`)} title="Copy all (host:port@user:pass)">
+                                                        <Copy size={10} /> All
                                                     </button>
                                                 )}
                                                 {(o.status === 'active' || o.status === 'pending') && (
@@ -652,8 +802,9 @@ function TabBtn({ label, active, onClick, count }: { label: string; active: bool
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProxyOrdersPage() {
-    const [tab, setTab] = useState<'buy' | 'orders'>('buy')
+    const [tab, setTab] = useState<'buy' | 'orders'>('orders')
     const [page, setPage] = useState(1)
+    const [limit, setLimit] = useState(10)
     const [selected, setSelected] = useState<any>(null)
     const [filterType, setFilterType] = useState('')
     const { success, error: toastError } = useToast()
@@ -668,8 +819,8 @@ export default function ProxyOrdersPage() {
     const products: any[] = prodData?.data?.data ?? []
 
     const { data: ordersData, isLoading: ordersLoading, refetch } = useQuery({
-        queryKey: ['proxy-orders', page],
-        queryFn: () => proxyAPI.listOrders(page),
+        queryKey: ['proxy-orders', page, limit],
+        queryFn: () => proxyAPI.listOrders(page, limit === 9999 ? 9999 : limit),
         refetchInterval: 15000,
     })
     const orders: any[] = ordersData?.data?.data ?? []
@@ -712,8 +863,8 @@ export default function ProxyOrdersPage() {
                 display: 'flex', borderBottom: '1px solid var(--border)',
                 marginBottom: '1.5rem', gap: '.25rem',
             }}>
-                <TabBtn label="🛒 Mua Proxy" active={tab === 'buy'} onClick={() => setTab('buy')} />
                 <TabBtn label="📦 Proxy của tôi" active={tab === 'orders'} onClick={() => setTab('orders')} count={orders.length || undefined} />
+                <TabBtn label="🛒 Mua Proxy" active={tab === 'buy'} onClick={() => setTab('buy')} />
             </div>
 
             {/* ─── Tab: Mua Proxy ─── */}
@@ -789,10 +940,14 @@ export default function ProxyOrdersPage() {
                         </div>
                     ) : (
                         <>
-                            <OrdersTable orders={orders} onCancel={handleCancel} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} />
-                            {orders.length > 0 && (
-                                <Pagination page={page} totalPages={meta.pages ?? 1} total={meta.total ?? 0} limit={20} onPageChange={setPage} />
-                            )}
+                            <OrdersTable orders={orders} onCancel={handleCancel} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
+                            <Pagination
+                                page={page}
+                                totalPages={meta.total_pages ?? 1}
+                                total={meta.total ?? orders.length}
+                                limit={limit === 9999 ? (meta.total ?? orders.length) : limit}
+                                onPageChange={p => setPage(p)}
+                            />
                         </>
                     )}
                 </div>

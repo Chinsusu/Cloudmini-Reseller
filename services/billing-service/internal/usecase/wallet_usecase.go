@@ -204,7 +204,7 @@ func (u *WalletUsecase) Hold(ctx context.Context, req HoldRequest) (*domain.Tran
 }
 
 // ConfirmHold transfers hold_amount to actual deduction (reduces both balance and hold).
-func (u *WalletUsecase) ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID *uuid.UUID) (*domain.Transaction, error) {
+func (u *WalletUsecase) ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID *uuid.UUID, description string) (*domain.Transaction, error) {
 	var txn *domain.Transaction
 	err := u.txRunner.RunInTx(ctx, func(ctx context.Context) error {
 		w, err := u.walletRepo.GetByUserIDForUpdate(ctx, userID)
@@ -232,6 +232,7 @@ func (u *WalletUsecase) ConfirmHold(ctx context.Context, userID uuid.UUID, amoun
 			BalanceAfter:  newBalance,
 			ReferenceType: refType,
 			ReferenceID:   refID,
+			Description:   description,
 			CreatedAt:     time.Now(),
 		}
 		return u.txnRepo.Create(ctx, txn)
@@ -243,7 +244,7 @@ func (u *WalletUsecase) ConfirmHold(ctx context.Context, userID uuid.UUID, amoun
 }
 
 // ReleaseHold releases a previously held amount back to available.
-func (u *WalletUsecase) ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID *uuid.UUID) (*domain.Transaction, error) {
+func (u *WalletUsecase) ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID *uuid.UUID, description string) (*domain.Transaction, error) {
 	var txn *domain.Transaction
 	err := u.txRunner.RunInTx(ctx, func(ctx context.Context) error {
 		w, err := u.walletRepo.GetByUserIDForUpdate(ctx, userID)
@@ -270,6 +271,7 @@ func (u *WalletUsecase) ReleaseHold(ctx context.Context, userID uuid.UUID, amoun
 			BalanceAfter:  w.Balance,
 			ReferenceType: refType,
 			ReferenceID:   refID,
+			Description:   description,
 			CreatedAt:     time.Now(),
 		}
 		return u.txnRepo.Create(ctx, txn)

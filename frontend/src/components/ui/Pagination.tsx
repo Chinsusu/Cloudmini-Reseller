@@ -9,10 +9,10 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, totalPages, total, limit, onPageChange }: PaginationProps) {
-    if (totalPages <= 1) return null
+    if (total === 0) return null
 
-    const from = (page - 1) * limit + 1
-    const to = Math.min(page * limit, total)
+    const from = Math.min((page - 1) * limit + 1, total)
+    const to   = Math.min(page * limit, total)
 
     // Build page numbers with ellipsis
     const pages: (number | '...')[] = []
@@ -28,15 +28,15 @@ export function Pagination({ page, totalPages, total, limit, onPageChange }: Pag
 
     return (
         <div className="pagination">
+            {/* Left: entries info */}
             <span className="pagination-info">
-                {from}–{to} of {total}
+                Hiển thị {from}–{to} của {total} mục
             </span>
+
+            {/* Right: page buttons */}
             <div className="pagination-controls">
-                <button
-                    className="pg-btn"
-                    disabled={page === 1}
-                    onClick={() => onPageChange(page - 1)}
-                >‹</button>
+                <button className="pg-btn" disabled={page === 1} onClick={() => onPageChange(1)} title="First">«</button>
+                <button className="pg-btn" disabled={page === 1} onClick={() => onPageChange(page - 1)}>‹</button>
 
                 {pages.map((p, i) =>
                     p === '...'
@@ -48,11 +48,8 @@ export function Pagination({ page, totalPages, total, limit, onPageChange }: Pag
                         >{p}</button>
                 )}
 
-                <button
-                    className="pg-btn"
-                    disabled={page === totalPages}
-                    onClick={() => onPageChange(page + 1)}
-                >›</button>
+                <button className="pg-btn" disabled={page === totalPages || totalPages <= 1} onClick={() => onPageChange(page + 1)}>›</button>
+                <button className="pg-btn" disabled={page === totalPages || totalPages <= 1} onClick={() => onPageChange(totalPages)} title="Last">»</button>
             </div>
         </div>
     )

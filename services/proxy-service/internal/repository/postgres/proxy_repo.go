@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -119,12 +120,16 @@ func (r *OrderRepository) UpdateAfterPurchase(ctx context.Context, id uuid.UUID,
 
 func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, offset, limit int) ([]*domain.Order, int, error) {
 	var total int
-	if err := r.db.GetContext(ctx, &total, `SELECT COUNT(*) FROM proxy.orders WHERE user_id=$1`, userID); err != nil {
+	// Exclude 'failed' orders — they are logged in order_events but not shown to users
+	const excludeFailed = ` WHERE user_id=$1 AND status != 'failed'`
+	if err := r.db.GetContext(ctx, &total,
+		`SELECT COUNT(*) FROM proxy.orders`+excludeFailed, userID,
+	); err != nil {
 		return nil, 0, fmt.Errorf("OrderRepository.ListByUser: count: %w", err)
 	}
 	var orders []*domain.Order
 	if err := r.db.SelectContext(ctx, &orders,
-		orderSelectCOALESCE+` WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		orderSelectCOALESCE+excludeFailed+` ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
 		userID, limit, offset,
 	); err != nil {
 		return nil, 0, fmt.Errorf("OrderRepository.ListByUser: select: %w", err)
@@ -241,4 +246,44 @@ func (r *ProviderRepository) ListActive(ctx context.Context) ([]*domain.Provider
 		return nil, fmt.Errorf("ProviderRepository.ListActive: %w", err)
 	}
 	return providers, nil
+}
+
+// ─── OrderEventRepository ──────────────────────────────────────────────────────
+
+// OrderEventRepository implements domain.IOrderEventRepository using PostgreSQL.
+type OrderEventRepository struct{ db *sqlx.DB }
+
+func NewOrderEventRepository(db *sqlx.DB) *OrderEventRepository {
+	return &OrderEventRepository{db: db}
+}
+
+// Log inserts a new event row for the given order.
+func (r *OrderEventRepository) Log(ctx context.Context, orderID uuid.UUID, eventType string, payload map[string]any) error {
+	p := []byte("{}")
+	if payload != nil {
+		if b, err := json.Marshal(payload); err == nil {
+			p = b
+		}
+	}
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO proxy.order_events (order_id, event_type, payload) VALUES ($1, $2, $3)`,
+		orderID, eventType, p,
+	)
+	if err != nil {
+		return fmt.Errorf("OrderEventRepository.Log: %w", err)
+	}
+	return nil
+}
+
+// ListByOrder returns all events for an order in chronological order.
+func (r *OrderEventRepository) ListByOrder(ctx context.Context, orderID uuid.UUID) ([]*domain.OrderEvent, error) {
+	var events []*domain.OrderEvent
+	if err := r.db.SelectContext(ctx, &events,
+		`SELECT id, order_id, event_type, payload, created_at
+		 FROM proxy.order_events WHERE order_id=$1 ORDER BY created_at ASC`,
+		orderID,
+	); err != nil {
+		return nil, fmt.Errorf("OrderEventRepository.ListByOrder: %w", err)
+	}
+	return events, nil
 }

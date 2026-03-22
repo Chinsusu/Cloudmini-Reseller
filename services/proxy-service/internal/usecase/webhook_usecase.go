@@ -24,6 +24,7 @@ type WebhookUsecase struct {
 	billingClient BillingClient
 	cipher        *cryptopkg.Cipher
 	eventPub      domain.IEventPublisher
+	orderEvtRepo  domain.IOrderEventRepository
 	logger        *slog.Logger
 }
 
@@ -34,6 +35,7 @@ func NewWebhookUsecase(
 	billingClient BillingClient,
 	cipher *cryptopkg.Cipher,
 	eventPub domain.IEventPublisher,
+	orderEvtRepo domain.IOrderEventRepository,
 	logger *slog.Logger,
 ) *WebhookUsecase {
 	return &WebhookUsecase{
@@ -42,6 +44,7 @@ func NewWebhookUsecase(
 		billingClient: billingClient,
 		cipher:        cipher,
 		eventPub:      eventPub,
+		orderEvtRepo:  orderEvtRepo,
 		logger:        logger,
 	}
 }
@@ -119,7 +122,7 @@ func (u *WebhookUsecase) FulfillFromProxyCheap(ctx context.Context, providerOrde
 	}
 
 	// Confirm the billing hold (deduct funds from wallet)
-	if err := u.billingClient.ConfirmHold(ctx, order.UserID, order.TotalAmount, "proxy_order", order.ID); err != nil {
+	if err := u.billingClient.ConfirmHold(ctx, order.UserID, order.TotalAmount, "proxy_order", order.ID, fmt.Sprintf("Proxy %s", order.OrderNumber)); err != nil {
 		// Log but don't fail — order is already activated; billing reconciliation can handle
 		u.logger.ErrorContext(ctx, "FulfillFromProxyCheap: confirm billing hold",
 			slog.String("order_id", order.ID.String()),
@@ -132,6 +135,12 @@ func (u *WebhookUsecase) FulfillFromProxyCheap(ctx context.Context, providerOrde
 	order.ActivatedAt = &activatedAt
 	order.ExpiresAt = expiresAtPtr
 	order.Credentials = encryptedCreds
+
+	// Log order.activated event (async path via webhook)
+	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderActivated, map[string]any{
+		"provider_order_id": providerOrderID,
+		"amount":            order.TotalAmount.String(),
+	})
 
 	go func() { _ = u.eventPub.PublishOrderFulfilled(context.Background(), order) }()
 

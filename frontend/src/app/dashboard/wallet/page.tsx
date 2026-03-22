@@ -29,7 +29,8 @@ export default function WalletPage() {
     const hold = parseFloat(wallet.hold_amount ?? '0')
     const available = balance - hold
 
-    const txs = txData?.data?.data ?? []
+    // Filter out intermediate 'hold' entries — hold_confirm represents the actual charge
+    const txs = (txData?.data?.data ?? []).filter((t: any) => t.type !== 'hold')
     const meta = txData?.data?.meta ?? {}
 
     const topUpMut = useMutation({
@@ -44,7 +45,12 @@ export default function WalletPage() {
     })
 
     const isCredit = (type: string) =>
-        ['deposit', 'order_refund', 'hold_release', 'adjustment'].includes(type)
+        ['deposit', 'order_refund', 'hold_release', 'adjustment', 'refund'].includes(type)
+
+    const TX_LABEL: Record<string, string> = {
+        deposit: 'Nạp tiền', refund: 'Hoàn tiền', hold_release: 'Hoàn giữ',
+        adjustment: 'Điều chỉnh', hold_confirm: 'Thanh toán', hold: 'Giữ tiền', debit: 'Trừ tiền',
+    }
 
     return (
         <AppLayout breadcrumb={[
@@ -174,15 +180,14 @@ export default function WalletPage() {
                                 <tbody>
                                     {txs.map((tx: any) => {
                                         const credit = isCredit(tx.type)
+                                        const label = TX_LABEL[tx.type] ?? tx.type.replace(/_/g, ' ')
                                         return (
                                             <tr key={tx.id}>
                                                 <td style={{ color: 'var(--text-muted)', fontSize: '.82rem', whiteSpace: 'nowrap' }}>
-                                                    {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    {(() => { const d = new Date(tx.created_at); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` })()}
                                                 </td>
                                                 <td>
-                                                    <span className={`badge badge-${tx.type}`}>
-                                                        {tx.type.replace(/_/g, ' ')}
-                                                    </span>
+                                                    <span className={`badge badge-${tx.type}`}>{label}</span>
                                                 </td>
                                                 <td style={{ color: 'var(--text-muted)', fontSize: '.85rem' }}>
                                                     {tx.description || '—'}
@@ -190,7 +195,7 @@ export default function WalletPage() {
                                                 <td style={{ textAlign: 'right', fontWeight: 600, color: credit ? 'var(--success)' : 'var(--error)' }}>
                                                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '.2rem' }}>
                                                         {credit ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                                                        {credit ? '+' : '-'}{formatVND(tx.amount)}
+                                                        {credit ? '+' : '-'}{formatVND(Math.abs(tx.amount))}
                                                     </span>
                                                 </td>
                                                 <td style={{ fontSize: '.875rem', color: 'var(--text-muted)' }}>
@@ -207,7 +212,7 @@ export default function WalletPage() {
                         </div>
                         <Pagination
                             page={page}
-                            totalPages={meta.pages ?? 1}
+                            totalPages={meta.total_pages ?? 1}
                             total={meta.total ?? 0}
                             limit={20}
                             onPageChange={setPage}

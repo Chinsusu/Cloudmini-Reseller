@@ -221,6 +221,7 @@ func (h *Handler) InternalConfirmHold(w http.ResponseWriter, r *http.Request) {
 		Amount        decimal.Decimal `json:"amount"`
 		ReferenceType string          `json:"reference_type"`
 		ReferenceID   string          `json:"reference_id"`
+		Description   string          `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
@@ -228,7 +229,7 @@ func (h *Handler) InternalConfirmHold(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := uuid.Parse(req.UserID)
 	refID, _ := uuid.Parse(req.ReferenceID)
-	_, err := h.walletUC.ConfirmHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID)
+	_, err := h.walletUC.ConfirmHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID, req.Description)
 	if err != nil {
 		h.handleError(w, r, err)
 		return
@@ -242,6 +243,7 @@ func (h *Handler) InternalReleaseHold(w http.ResponseWriter, r *http.Request) {
 		Amount        decimal.Decimal `json:"amount"`
 		ReferenceType string          `json:"reference_type"`
 		ReferenceID   string          `json:"reference_id"`
+		Description   string          `json:"description"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
@@ -249,7 +251,7 @@ func (h *Handler) InternalReleaseHold(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := uuid.Parse(req.UserID)
 	refID, _ := uuid.Parse(req.ReferenceID)
-	_, err := h.walletUC.ReleaseHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID)
+	_, err := h.walletUC.ReleaseHold(r.Context(), userID, req.Amount, req.ReferenceType, &refID, req.Description)
 	if err != nil {
 		h.handleError(w, r, err)
 		return

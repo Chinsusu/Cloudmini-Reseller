@@ -20,21 +20,22 @@ import (
 // In production: use a proper gRPC client or internal HTTP client.
 type BillingClient interface {
 	Hold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID) error
-	ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID) error
-	ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID) error
+	ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID, description string) error
+	ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID, description string) error
 	CalculatePrice(ctx context.Context, baseCost decimal.Decimal, productType string, productID uuid.UUID, resellerID *uuid.UUID) (decimal.Decimal, error)
 }
 
 // OrderUsecase handles the proxy order lifecycle.
 type OrderUsecase struct {
-	orderRepo    domain.IOrderRepository
-	productRepo  domain.IProductRepository
-	providerRepo domain.IProviderRepository
-	providerReg  *providers.Registry
+	orderRepo     domain.IOrderRepository
+	productRepo   domain.IProductRepository
+	providerRepo  domain.IProviderRepository
+	providerReg   *providers.Registry
 	billingClient BillingClient
-	cipher       *cryptopkg.Cipher
-	eventPub     domain.IEventPublisher
-	logger       *slog.Logger
+	cipher        *cryptopkg.Cipher
+	eventPub      domain.IEventPublisher
+	orderEvtRepo  domain.IOrderEventRepository
+	logger        *slog.Logger
 }
 
 // NewOrderUsecase constructs OrderUsecase via DI.
@@ -46,6 +47,7 @@ func NewOrderUsecase(
 	billingClient BillingClient,
 	cipher *cryptopkg.Cipher,
 	eventPub domain.IEventPublisher,
+	orderEvtRepo domain.IOrderEventRepository,
 	logger *slog.Logger,
 ) *OrderUsecase {
 	return &OrderUsecase{
@@ -56,6 +58,7 @@ func NewOrderUsecase(
 		billingClient: billingClient,
 		cipher:        cipher,
 		eventPub:      eventPub,
+		orderEvtRepo:  orderEvtRepo,
 		logger:        logger,
 	}
 }
@@ -113,7 +116,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	// Create order in pending state
 	order := &domain.Order{
 		ID:             uuid.New(),
-		OrderNumber:    fmt.Sprintf("PX-%d", time.Now().UnixNano()),
+		OrderNumber:    fmt.Sprintf("PX-%s-%04X", time.Now().Format("060102"), uint16(time.Now().UnixNano()&0xFFFF)),
 		UserID:         req.UserID,
 		ResellerID:     req.ResellerID,
 		ProductID:      req.ProductID,
@@ -131,6 +134,11 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	if err := u.orderRepo.Create(ctx, order); err != nil {
 		return nil, fmt.Errorf("CreateOrder: create order: %w", err)
 	}
+	// Log order.created event
+	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderCreated, map[string]any{
+		"product_id": order.ProductID.String(),
+		"amount":     order.TotalAmount.String(),
+	})
 
 	// ── Step 3: Hold funds in billing ──────────────────────────────────────
 	if err := u.billingClient.Hold(ctx, req.UserID, totalAmount, "proxy_order", order.ID); err != nil {
@@ -143,7 +151,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	provider := u.providerReg.Get(product.ProviderID.String())
 	if provider == nil {
 		// Compensate: release hold
-		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
 		_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
 		_ = u.eventPub.PublishOrderFailed(ctx, order.ID, "no_provider_available")
 		return nil, domain.ErrNoProviderAvailable
@@ -159,7 +167,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	})
 	if err != nil {
 		// Compensate: release hold
-		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
 		_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
 		_ = u.eventPub.PublishOrderFailed(ctx, order.ID, "provider_purchase_failed")
 		return nil, fmt.Errorf("CreateOrder step4: %w: %w", domain.ErrProviderPurchase, err)
@@ -174,7 +182,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		if err := u.orderRepo.UpdateAfterPurchase(ctx, order.ID,
 			purchaseResult.ProviderOrderID, "", nil, nil,
 		); err != nil {
-			_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+			_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
 			_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
 			return nil, fmt.Errorf("CreateOrder step5 (async): save provider order id: %w", err)
 		}
@@ -192,7 +200,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	credJSON, _ := json.Marshal(purchaseResult.Credentials)
 	encryptedCreds, err := u.cipher.Encrypt(credJSON)
 	if err != nil {
-		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
 		_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
 		return nil, fmt.Errorf("CreateOrder step5: encrypt: %w", err)
 	}
@@ -208,12 +216,16 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	if err := u.orderRepo.UpdateAfterPurchase(ctx, order.ID,
 		purchaseResult.ProviderOrderID, encryptedCreds, &activatedAt, expiresAt,
 	); err != nil {
-		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
 		_ = u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderFailed)
 		return nil, fmt.Errorf("CreateOrder step6: update order: %w", err)
 	}
 
-	_ = u.billingClient.ConfirmHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID)
+	_ = u.billingClient.ConfirmHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, fmt.Sprintf("Proxy %s", order.OrderNumber))
+	// Log order.activated event
+	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderActivated, map[string]any{
+		"amount": order.TotalAmount.String(),
+	})
 
 	// ── Step 7: Publish fulfilled event ────────────────────────────────────
 	order.Status = domain.OrderActive
@@ -232,7 +244,9 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 }
 
 // GetCredentials returns decrypted proxy credentials for an order.
-func (u *OrderUsecase) GetCredentials(ctx context.Context, orderID, userID uuid.UUID) (map[string]any, error) {
+// Credentials are stored as a JSON array of ProxyCredential objects.
+// Returns the first credential for single-proxy orders for backwards compat.
+func (u *OrderUsecase) GetCredentials(ctx context.Context, orderID, userID uuid.UUID) (any, error) {
 	order, err := u.orderRepo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("GetCredentials: %w", err)
@@ -249,11 +263,21 @@ func (u *OrderUsecase) GetCredentials(ctx context.Context, orderID, userID uuid.
 		return nil, fmt.Errorf("GetCredentials: decrypt: %w", err)
 	}
 
-	var creds map[string]any
-	if err := json.Unmarshal(plain, &creds); err != nil {
+	// Try array first (current format: []ProxyCredential)
+	var credArr []map[string]any
+	if err := json.Unmarshal(plain, &credArr); err == nil {
+		if len(credArr) == 1 {
+			return credArr[0], nil // single proxy — return directly for frontend compat
+		}
+		return credArr, nil
+	}
+
+	// Fallback: legacy single-object format
+	var credSingle map[string]any
+	if err := json.Unmarshal(plain, &credSingle); err != nil {
 		return nil, fmt.Errorf("GetCredentials: unmarshal: %w", err)
 	}
-	return creds, nil
+	return credSingle, nil
 }
 
 // CancelOrder cancels an active order (must be in active status).
@@ -272,6 +296,13 @@ func (u *OrderUsecase) CancelOrder(ctx context.Context, orderID, userID uuid.UUI
 	if err := u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderCancelled); err != nil {
 		return fmt.Errorf("CancelOrder: update status: %w", err)
 	}
+
+	// Release billing hold to refund balance and create a visible transaction log
+	_ = u.billingClient.ReleaseHold(ctx, order.UserID, order.TotalAmount, "proxy_order", order.ID, fmt.Sprintf("Hoàn tiền Proxy %s", order.OrderNumber))
+	// Log order.cancelled event
+	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderCancelled, map[string]any{
+		"reason": reason,
+	})
 
 	go func() { _ = u.eventPub.PublishOrderCancelled(context.Background(), order) }()
 	return nil

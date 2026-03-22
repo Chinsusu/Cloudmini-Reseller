@@ -11,6 +11,30 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] — 2026-03-23
+
+### Added
+- **proxy-service** VPM provider adapter (`internal/providers/vpm/`) — tích hợp VPS Proxy Manager
+  vào Cloudmini như một sync proxy provider (credentials trả về ngay, không cần webhook)
+  - `types.go`: DTOs ánh xạ VPM API (`CreateProxyRequest`, `ProxySummary`, `APIError`)
+  - `client.go`: HTTP client với Bearer auth, retry 3x exponential backoff, envelope unwrapping
+  - `adapter.go`: Implement `IProxyProvider` (`Purchase`→`POST /proxies`, `Cancel`→`DELETE /proxies/{id}`,
+    `CheckStatus`→`GET /proxies/{id}`)
+  - `adapter_test.go`: 13 unit tests (httptest.NewServer, không cần server thật)
+- **proxy-service** `migrations/000010_add_vpm_provider.sql` — seed `proxy.providers` row cho VPM
+  với UUID `b2000000-0000-0000-0000-000000000002`
+- **docs** `22-VPM-ADAPTER.md` — tài liệu thiết kế đầy đủ cho VPM adapter
+
+### Fixed
+- **proxy-service** `OrderRepository.ListByUser` exclude `status='failed'` orders khỏi danh sách
+  proxy của user — failed orders chỉ lưu trong `proxy.order_events` log, không hiển thị trong UI
+
+### Changed
+- **proxy-service** VPM adapter register bằng UUID provider (`b2000000-...`) thay vì string tên,
+  đảm bảo khớp với cách `order_usecase` lookup bằng `product.ProviderID.String()`
+
+---
+
 ## [0.10.0] — 2026-03-13
 
 ### Fixed

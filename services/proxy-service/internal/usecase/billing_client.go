@@ -31,13 +31,13 @@ func (c *HTTPBillingClient) Hold(ctx context.Context, userID uuid.UUID, amount d
 	return c.post(ctx, "/internal/billing/hold", body)
 }
 
-func (c *HTTPBillingClient) ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID) error {
-	body := map[string]any{"user_id": userID, "amount": amount, "reference_type": refType, "reference_id": refID}
+func (c *HTTPBillingClient) ConfirmHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID, description string) error {
+	body := map[string]any{"user_id": userID, "amount": amount, "reference_type": refType, "reference_id": refID, "description": description}
 	return c.post(ctx, "/internal/billing/confirm-hold", body)
 }
 
-func (c *HTTPBillingClient) ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID) error {
-	body := map[string]any{"user_id": userID, "amount": amount, "reference_type": refType, "reference_id": refID}
+func (c *HTTPBillingClient) ReleaseHold(ctx context.Context, userID uuid.UUID, amount decimal.Decimal, refType string, refID uuid.UUID, description string) error {
+	body := map[string]any{"user_id": userID, "amount": amount, "reference_type": refType, "reference_id": refID, "description": description}
 	return c.post(ctx, "/internal/billing/release-hold", body)
 }
 

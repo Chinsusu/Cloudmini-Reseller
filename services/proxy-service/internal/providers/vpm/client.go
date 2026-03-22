@@ -1,0 +1,179 @@
+package vpm
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+const (
+	defaultTimeout = 30 * time.Second
+	maxRetries     = 3
+)
+
+// Client handles HTTP communication with the VPM API.
+// Authentication uses Bearer token in the Authorization header.
+type Client struct {
+	baseURL    string
+	apiKey     string
+	httpClient *http.Client
+}
+
+// NewClient creates a VPM API client.
+func NewClient(baseURL, apiKey string) *Client {
+	return &Client{
+		baseURL: baseURL,
+		apiKey:  apiKey,
+		httpClient: &http.Client{
+			Timeout: defaultTimeout,
+		},
+	}
+}
+
+// NewClientWithHTTP creates a client with a custom http.Client (for testing).
+func NewClientWithHTTP(baseURL, apiKey string, httpClient *http.Client) *Client {
+	return &Client{baseURL: baseURL, apiKey: apiKey, httpClient: httpClient}
+}
+
+// do executes an authenticated HTTP request to VPM.
+// body may be nil for requests without payload. out may be nil to discard response.
+func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
+	var reqBody io.Reader
+	var bodyBytes []byte
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("vpm: marshal request: %w", err)
+		}
+		bodyBytes = b
+		reqBody = bytes.NewReader(b)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	if err != nil {
+		return fmt.Errorf("vpm: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 1s, 2s
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Duration(1<<uint(attempt-1)) * time.Second):
+			}
+			// Re-set body for retry (already consumed)
+			if bodyBytes != nil {
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("vpm: http do: %w", err)
+			continue
+		}
+
+		respBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		// Retry on 5xx
+		if resp.StatusCode >= 500 {
+			lastErr = &APIError{StatusCode: resp.StatusCode, Message: string(respBytes)}
+			continue
+		}
+
+		// 4xx — parse and return error immediately (no retry)
+		if resp.StatusCode >= 400 {
+			var apiResp apiResponse
+			if jsonErr := json.Unmarshal(respBytes, &apiResp); jsonErr == nil && apiResp.Error != nil {
+				return &APIError{
+					StatusCode: resp.StatusCode,
+					Code:       apiResp.Error.Code,
+					Message:    apiResp.Error.Message,
+				}
+			}
+			return &APIError{StatusCode: resp.StatusCode, Message: string(respBytes)}
+		}
+
+		// 2xx — parse response body
+		if out != nil && len(respBytes) > 0 {
+			// VPM wraps responses in { success, data, error }
+			var apiResp apiResponse
+			if err := json.Unmarshal(respBytes, &apiResp); err != nil {
+				return fmt.Errorf("vpm: unmarshal envelope: %w", err)
+			}
+			if !apiResp.Success && apiResp.Error != nil {
+				return &APIError{
+					StatusCode: resp.StatusCode,
+					Code:       apiResp.Error.Code,
+					Message:    apiResp.Error.Message,
+				}
+			}
+			if len(apiResp.Data) > 0 {
+				if err := json.Unmarshal(apiResp.Data, out); err != nil {
+					return fmt.Errorf("vpm: unmarshal data: %w", err)
+				}
+			}
+		}
+		return nil
+	}
+	return lastErr
+}
+
+// ─── Proxy Methods ────────────────────────────────────────────────────────────
+
+// CreateProxy allocates a new proxy on VPM.
+// POST /api/v1/proxies
+func (c *Client) CreateProxy(ctx context.Context, req CreateProxyRequest) (*ProxySummary, error) {
+	var out ProxySummary
+	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies", req, &out); err != nil {
+		return nil, fmt.Errorf("vpm.CreateProxy: %w", err)
+	}
+	return &out, nil
+}
+
+// DeleteProxy permanently removes a proxy, releasing its port and IP.
+// DELETE /api/v1/proxies/{id}
+func (c *Client) DeleteProxy(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodDelete, "/api/v1/proxies/"+proxyID, nil, nil); err != nil {
+		return fmt.Errorf("vpm.DeleteProxy: %w", err)
+	}
+	return nil
+}
+
+// GetProxy returns details of a proxy including status and bandwidth.
+// GET /api/v1/proxies/{id}
+func (c *Client) GetProxy(ctx context.Context, proxyID string) (*ProxySummary, error) {
+	var out ProxySummary
+	if err := c.do(ctx, http.MethodGet, "/api/v1/proxies/"+proxyID, nil, &out); err != nil {
+		return nil, fmt.Errorf("vpm.GetProxy: %w", err)
+	}
+	return &out, nil
+}
+
+// StopProxy suspends a proxy without deleting it (port/IP kept reserved).
+// POST /api/v1/proxies/{id}/stop
+func (c *Client) StopProxy(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies/"+proxyID+"/stop", nil, nil); err != nil {
+		return fmt.Errorf("vpm.StopProxy: %w", err)
+	}
+	return nil
+}
+
+// StartProxy re-activates a stopped proxy.
+// POST /api/v1/proxies/{id}/start
+func (c *Client) StartProxy(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies/"+proxyID+"/start", nil, nil); err != nil {
+		return fmt.Errorf("vpm.StartProxy: %w", err)
+	}
+	return nil
+}

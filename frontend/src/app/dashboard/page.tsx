@@ -68,7 +68,8 @@ export default function DashboardPage() {
     const balance = wallet?.data?.data?.balance ?? '0.00'
     const orderCount = orders?.data?.meta?.total ?? 0
     const vpsCount = vps?.data?.meta?.total ?? 0
-    const txs: any[] = (txData?.data?.data ?? []).slice(0, 8)
+    // Filter out intermediate 'hold' entries — hold_confirm represents the actual charge
+    const txs: any[] = (txData?.data?.data ?? []).filter((t: any) => t.type !== 'hold').slice(0, 8)
 
     const hour = new Date().getHours()
     const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
@@ -170,30 +171,44 @@ function RecentActivities({ txs }: { txs: any[] }) {
         )
     }
 
+    const TX_LABEL: Record<string, string> = {
+        deposit: 'Nạp tiền',
+        refund: 'Hoàn tiền',
+        hold_release: 'Hoàn giữ',
+        adjustment: 'Điều chỉnh',
+        hold_confirm: 'Thanh toán',
+        hold: 'Giữ tiền',
+        debit: 'Trừ tiền',
+    }
+
     return (
         <div className="table-wrapper">
             <table className="data-table">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Amount</th>
-                        <th>Status</th>
+                        <th>Ngày</th>
+                        <th>Loại</th>
+                        <th>Mô tả</th>
+                        <th>Số tiền</th>
+                        <th>Trạng thái</th>
                     </tr>
                 </thead>
                 <tbody>
                     {txs.map((tx: any) => {
                         const isCredit = ['deposit', 'refund', 'hold_release', 'adjustment'].includes(tx.type)
+                        const label = TX_LABEL[tx.type] ?? tx.type.replace(/_/g, ' ')
                         return (
                             <tr key={tx.id}>
                                 <td style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>
-                                    {new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    {(() => {
+                                        const d = new Date(tx.created_at)
+                                        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+                                    })()}
                                 </td>
-                                <td><span className={`badge badge-${tx.type}`}>{tx.type.replace(/_/g, ' ')}</span></td>
+                                <td><span className={`badge badge-${tx.type}`}>{label}</span></td>
                                 <td style={{ color: 'var(--text-muted)', fontSize: '.85rem' }}>{tx.description || '—'}</td>
                                 <td style={{ fontWeight: 700, color: isCredit ? 'var(--success)' : 'var(--error)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {isCredit ? '+' : '-'}{formatVND(tx.amount)}
+                                    {isCredit ? '+' : '-'}{formatVND(Math.abs(tx.amount))}
                                 </td>
                                 <td><span className="badge badge-success">{tx.status}</span></td>
                             </tr>
@@ -204,3 +219,4 @@ function RecentActivities({ txs }: { txs: any[] }) {
         </div>
     )
 }
+

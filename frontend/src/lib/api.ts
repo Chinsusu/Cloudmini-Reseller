@@ -96,14 +96,24 @@ export const walletAPI = {
 export const proxyAPI = {
     listProducts: (proxyType = '', protocol = '', location = '') =>
         api.get(`/v1/proxy/products?proxy_type=${proxyType}&protocol=${protocol}&location=${location}`),
-    listOrders: (page = 1) => api.get(`/v1/proxy/orders?page=${page}&limit=20`),
-    createOrder: (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number }) =>
-        api.post('/v1/proxy/orders', { product_id: productId, quantity: qty, metadata: meta ?? {}, idempotency_key: generateUUID() }),
+    listOrders: (page = 1, limit = 20) => api.get(`/v1/proxy/orders?page=${page}&limit=${limit}`),
+    createOrder: async (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number }) => {
+        // Create qty individual orders SEQUENTIALLY to avoid billing wallet row-lock race condition
+        const count = Math.max(1, qty)
+        let lastResult: any
+        for (let i = 0; i < count; i++) {
+            lastResult = await api.post('/v1/proxy/orders', {
+                product_id: productId, quantity: 1, metadata: meta ?? {}, idempotency_key: generateUUID()
+            })
+        }
+        return lastResult
+    },
     getOrder: (id: string) => api.get(`/v1/proxy/orders/${id}`),
     cancelOrder: (id: string) => api.delete(`/v1/proxy/orders/${id}`),
     patchOrder: (id: string, data: { custom_price?: string; custom_expires_at?: string; admin_note?: string }) =>
         api.patch(`/v1/proxy/orders/${id}`, data),
     getCredentials: (id: string) => api.get(`/v1/proxy/orders/${id}/credentials`),
+    getOrderEvents: (id: string) => api.get(`/v1/proxy/orders/${id}/events`),
     serviceOptions: (serviceId: string, planId?: string) =>
         api.get(`/v1/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),
 }

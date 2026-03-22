@@ -19,6 +19,7 @@ import (
 	httphandler "github.com/pvp/proxy-service/internal/handler/http"
 	"github.com/pvp/proxy-service/internal/providers"
 	proxycheap "github.com/pvp/proxy-service/internal/providers/proxy_cheap"
+	"github.com/pvp/proxy-service/internal/providers/vpm"
 	repopg "github.com/pvp/proxy-service/internal/repository/postgres"
 	"github.com/pvp/proxy-service/internal/usecase"
 )
@@ -36,6 +37,10 @@ func main() {
 	proxyCheapAPIKey    := getEnv("PROXY_CHEAP_API_KEY", "")
 	proxyCheapAPISecret := getEnv("PROXY_CHEAP_API_SECRET", "")
 	proxyCheapWHSecret  := getEnv("PROXY_CHEAP_WEBHOOK_SECRET", "")
+
+	// VPS Proxy Manager credentials (optional)
+	vpmBaseURL := getEnv("VPM_BASE_URL", "")
+	vpmAPIKey  := getEnv("VPM_API_KEY", "")
 
 	log := logger.New(logLevel)
 
@@ -60,9 +65,10 @@ func main() {
 	}
 
 	// Repos
-	orderRepo    := repopg.NewOrderRepository(db)
-	productRepo  := repopg.NewProductRepository(db)
-	providerRepo := repopg.NewProviderRepository(db)
+	orderRepo     := repopg.NewOrderRepository(db)
+	orderEvtRepo  := repopg.NewOrderEventRepository(db)
+	productRepo   := repopg.NewProductRepository(db)
+	providerRepo  := repopg.NewProviderRepository(db)
 
 	// Events
 	natsPub  := natspkg.NewPublisher(natsClient)
@@ -89,14 +95,28 @@ func main() {
 		log.Warn("PROXY_CHEAP_API_KEY/SECRET not set — proxy-cheap adapter disabled")
 	}
 
+	// VPM adapter — sync provider using internal VPS Proxy Manager
+	// Registry key MUST match the provider UUID in proxy.providers table
+	// because order_usecase looks up by product.ProviderID.String()
+	if vpmBaseURL != "" && vpmAPIKey != "" {
+		vpmAdapter := vpm.NewAdapter(vpm.Config{
+			BaseURL: vpmBaseURL,
+			APIKey:  vpmAPIKey,
+		})
+		registry.Register("b2000000-0000-0000-0000-000000000002", vpmAdapter)
+		log.Info("vpm adapter registered", slog.String("base_url", vpmBaseURL))
+	} else {
+		log.Warn("VPM_BASE_URL/API_KEY not set — vpm adapter disabled")
+	}
+
 	// ── Usecases ─────────────────────────────────────────────────────────────
 	orderUC := usecase.NewOrderUsecase(
 		orderRepo, productRepo, providerRepo,
-		registry, billingClient, cipher, eventPub, log,
+		registry, billingClient, cipher, eventPub, orderEvtRepo, log,
 	)
 
 	webhookUC := usecase.NewWebhookUsecase(
-		orderRepo, productRepo, billingClient, cipher, eventPub, log,
+		orderRepo, productRepo, billingClient, cipher, eventPub, orderEvtRepo, log,
 	)
 
 	// ── Webhook HTTP handler ─────────────────────────────────────────────────
@@ -110,7 +130,7 @@ func main() {
 
 	// ── HTTP ──────────────────────────────────────────────────────────────────
 	auditLogger := mw.NewNATSAuditLogger(natsPub, "proxy-service")
-	handler := httphandler.NewHandler(orderUC, orderRepo, productRepo, providerRepo, webhookHTTP, log)
+	handler := httphandler.NewHandler(orderUC, orderRepo, orderEvtRepo, productRepo, providerRepo, webhookHTTP, log)
 	if proxyCheapAPIKey != "" && proxyCheapAPISecret != "" {
 		pcClient := proxycheap.NewClient(proxyCheapAPIKey, proxyCheapAPISecret)
 		handler.WithProxyCheapClient(pcClient)
