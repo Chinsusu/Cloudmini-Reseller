@@ -561,6 +561,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
     const [editOrder, setEditOrder] = useState<any>(null)
     const [historyOrder, setHistoryOrder] = useState<any>(null)
     const [renewingId, setRenewingId] = useState<string | null>(null)
+    const [lockingId, setLockingId] = useState<string | null>(null)
     const { success, error: toastError } = useToast()
 
     // Auto-load credentials for all active orders
@@ -776,21 +777,23 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
                                                 {onLock && (isActive || isExpired) && (
                                                     <button
                                                         className="action-btn"
-                                                        style={{ background: 'rgba(239,68,68,.12)', color: '#f87171', border: '1px solid rgba(239,68,68,.3)', fontSize: '.72rem' }}
-                                                        onClick={() => onLock(o.id, o.order_number)}
+                                                        style={{ background: 'rgba(239,68,68,.12)', color: '#f87171', border: '1px solid rgba(239,68,68,.3)', fontSize: '.72rem', opacity: lockingId === o.id ? .5 : 1 }}
+                                                        disabled={lockingId === o.id}
+                                                        onClick={async () => { setLockingId(o.id); try { await onLock(o.id, o.order_number) } finally { setLockingId(null) } }}
                                                         title="Khóa proxy (admin)"
                                                     >
-                                                        🔒 Lock
+                                                        {lockingId === o.id ? '...' : '🔒 Lock'}
                                                     </button>
                                                 )}
                                                 {onUnlock && isSuspended && (
                                                     <button
                                                         className="action-btn"
-                                                        style={{ background: 'rgba(34,197,94,.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,.3)', fontSize: '.72rem' }}
-                                                        onClick={() => onUnlock(o.id, o.order_number)}
+                                                        style={{ background: 'rgba(34,197,94,.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,.3)', fontSize: '.72rem', opacity: lockingId === o.id ? .5 : 1 }}
+                                                        disabled={lockingId === o.id}
+                                                        onClick={async () => { setLockingId(o.id); try { await onUnlock(o.id, o.order_number) } finally { setLockingId(null) } }}
                                                         title="Mở khóa proxy (admin)"
                                                     >
-                                                        🔓 Unlock
+                                                        {lockingId === o.id ? '...' : '🔓 Unlock'}
                                                     </button>
                                                 )}
                                                 {(o.status === 'active' || o.status === 'pending') && (
