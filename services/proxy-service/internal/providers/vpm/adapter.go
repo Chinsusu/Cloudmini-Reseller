@@ -88,10 +88,20 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 		}
 	}
 
-	proxies, err := a.client.CreateProxyV2(ctx, createReq)
+	// Default: POST /api/v2/ipv4 with specific IP from metadata.
+	// Region-based creation (POST /api/v2/proxies with group_id) is reserved for future use.
+	ipv4 := m["ipv4"]
+	var proxies []ProxySummaryV2
+	var err error
+	if ipv4 != "" {
+		proxies, err = a.client.CreateProxyByIPV4(ctx, ipv4, protocol)
+	} else {
+		proxies, err = a.client.CreateProxyV2(ctx, createReq)
+	}
 	if err != nil {
 		return nil, mapError(err)
 	}
+
 	if len(proxies) == 0 {
 		return nil, fmt.Errorf("%w: vpm returned empty proxy list", providers.ErrProviderUnavailable)
 	}

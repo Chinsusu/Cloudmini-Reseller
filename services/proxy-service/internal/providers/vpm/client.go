@@ -145,9 +145,8 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 
 // ─── API v2 Methods (current) ─────────────────────────────────────────────────
 
-// CreateProxyV2 allocates one or more proxies on VPM.
-// POST /api/v2/proxies?access_code=<key>
-// Returns an array of ProxySummaryV2.
+// CreateProxyV2 allocates proxies from a region pool.
+// POST /api/v2/proxies?access_code=<key> — used when group_id/region is specified.
 func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([]ProxySummaryV2, error) {
 	if req.Count == 0 {
 		req.Count = 1
@@ -155,6 +154,18 @@ func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([
 	var out []ProxySummaryV2
 	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies", req, &out); err != nil {
 		return nil, fmt.Errorf("vpm.CreateProxyV2: %w", err)
+	}
+	return out, nil
+}
+
+// CreateProxyByIPV4 allocates a proxy for a specific IP address (default endpoint).
+// POST /api/v2/ipv4?access_code=<key>
+// body: {"ipv4": "<ip>", "protocol": "default"|"http"|"socks5"}
+func (c *Client) CreateProxyByIPV4(ctx context.Context, ipv4, protocol string) ([]ProxySummaryV2, error) {
+	body := map[string]string{"ipv4": ipv4, "protocol": protocol}
+	var out []ProxySummaryV2
+	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4", body, &out); err != nil {
+		return nil, fmt.Errorf("vpm.CreateProxyByIPV4: %w", err)
 	}
 	return out, nil
 }
