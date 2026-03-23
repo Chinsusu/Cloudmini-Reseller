@@ -114,6 +114,7 @@ export const proxyAPI = {
         api.patch(`/v1/proxy/orders/${id}`, data),
     getCredentials: (id: string) => api.get(`/v1/proxy/orders/${id}/credentials`),
     getOrderEvents: (id: string) => api.get(`/v1/proxy/orders/${id}/events`),
+    renewOrder: (id: string) => api.post(`/v1/proxy/orders/${id}/renew`),
     serviceOptions: (serviceId: string, planId?: string) =>
         api.get(`/v1/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),
 }

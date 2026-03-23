@@ -136,6 +136,21 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RenewOrder handles POST /api/v1/proxy/orders/{id}/renew
+// Renews an expired order during its grace period.
+// New expiry = COALESCE(custom_expires_at, expires_at) + product.DurationDays.
+func (h *Handler) RenewOrder(w http.ResponseWriter, r *http.Request) {
+	userID := mustParseUUID(middleware.GetUserID(r.Context()))
+	orderID := mustParseUUID(chi.URLParam(r, "id"))
+
+	order, err := h.orderUC.RenewOrder(r.Context(), orderID, userID)
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, order)
+}
+
 // PatchOrder handles PATCH /api/v1/proxy/orders/{id}
 // Allows users to set custom_price and custom_expires_at on their own orders.
 func (h *Handler) PatchOrder(w http.ResponseWriter, r *http.Request) {
@@ -411,8 +426,9 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Get("/orders/{id}", h.GetOrder)
 				r.Patch("/orders/{id}", h.PatchOrder)
 			r.Delete("/orders/{id}", h.CancelOrder)
-				r.Get("/orders/{id}/credentials", h.GetCredentials)
+			r.Get("/orders/{id}/credentials", h.GetCredentials)
 				r.Get("/orders/{id}/events", h.GetOrderEvents)
+				r.Post("/orders/{id}/renew", h.RenewOrder)
 		})
 
 		// Admin endpoints

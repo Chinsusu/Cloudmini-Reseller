@@ -119,6 +119,15 @@ func (a *Adapter) Suspend(ctx context.Context, providerOrderID string) error {
 	return nil
 }
 
+// Resume calls POST /api/v1/proxies/{id}/start, re-activating a suspended proxy.
+// Used when a user renews an expired order during the grace period.
+func (a *Adapter) Resume(ctx context.Context, providerOrderID string) error {
+	if err := a.client.StartProxy(ctx, providerOrderID); err != nil {
+		return mapError(err)
+	}
+	return nil
+}
+
 // CheckStatus calls GET /api/v1/proxies/{id} and maps VPM status to Cloudmini constants.
 //
 // VPM status → Cloudmini:

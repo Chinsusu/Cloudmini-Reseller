@@ -324,3 +324,97 @@ func (u *OrderUsecase) GetOrder(ctx context.Context, orderID, userID uuid.UUID) 
 	}
 	return order, nil
 }
+
+// RenewOrder renews an expired order during its grace period.
+// New expiry is calculated from the effective expiry (COALESCE(custom_expires_at, expires_at))
+// + product duration, so users do not lose days due to late renewal.
+func (u *OrderUsecase) RenewOrder(ctx context.Context, orderID, userID uuid.UUID) (*domain.Order, error) {
+	order, err := u.orderRepo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("RenewOrder: %w", err)
+	}
+	if order.UserID != userID {
+		return nil, fmt.Errorf("RenewOrder: forbidden")
+	}
+	if order.Status != domain.OrderExpired {
+		return nil, fmt.Errorf("RenewOrder: order must be in 'expired' status (current: %s)", order.Status)
+	}
+
+	// Load product to get duration and price
+	product, err := u.productRepo.GetByID(ctx, order.ProductID)
+	if err != nil {
+		return nil, fmt.Errorf("RenewOrder: load product: %w", err)
+	}
+	if product.DurationDays == nil || *product.DurationDays <= 0 {
+		return nil, fmt.Errorf("RenewOrder: product has no fixed duration — cannot renew")
+	}
+
+	// Calculate renewal price (same as original — use custom_price if admin set one)
+	renewPrice := order.TotalAmount
+	if order.CustomPrice != nil {
+		renewPrice = *order.CustomPrice
+	}
+
+	// New expiry = effective_expiry + duration (NOT from now — fair to user)
+	effectiveExpiry := order.ExpiresAt
+	if order.CustomExpiresAt != nil {
+		effectiveExpiry = order.CustomExpiresAt
+	}
+	if effectiveExpiry == nil {
+		return nil, fmt.Errorf("RenewOrder: order has no expiry date")
+	}
+	newExpiry := effectiveExpiry.AddDate(0, 0, *product.DurationDays)
+
+	// ── Billing: hold → confirm ──────────────────────────────────────────────
+	if err := u.billingClient.Hold(ctx, order.UserID, renewPrice, "proxy_order", order.ID); err != nil {
+		return nil, fmt.Errorf("RenewOrder: billing hold: %w", err)
+	}
+	if err := u.billingClient.ConfirmHold(ctx, order.UserID, renewPrice, "proxy_order", order.ID,
+		fmt.Sprintf("Gia hạn Proxy %s (+%d ngày)", order.OrderNumber, *product.DurationDays),
+	); err != nil {
+		// Rollback hold
+		_ = u.billingClient.ReleaseHold(ctx, order.UserID, renewPrice, "proxy_order", order.ID, "renew failed — release hold")
+		return nil, fmt.Errorf("RenewOrder: billing confirm: %w", err)
+	}
+
+	// ── Resume at provider ───────────────────────────────────────────────────
+	if order.ProviderOrderID != "" {
+		provider := u.providerReg.Get(order.ProviderID.String())
+		if provider != nil {
+			if err := provider.Resume(ctx, order.ProviderOrderID); err != nil {
+				// Log but don't fail — proxy might already be running (e.g. proxy_cheap)
+				u.logger.WarnContext(ctx, "RenewOrder: resume at provider failed (continuing)", slog.String("err", err.Error()))
+			}
+		}
+	}
+
+	// ── Update order in DB ───────────────────────────────────────────────────
+	// Clear custom_expires_at and set expires_at = new effective expiry
+	if err := u.orderRepo.UpdateAfterPurchase(ctx, order.ID, order.ProviderOrderID, order.Credentials, order.ActivatedAt, &newExpiry); err != nil {
+		return nil, fmt.Errorf("RenewOrder: update: %w", err)
+	}
+	// Clear custom_expires_at so newExpiry becomes the canonical expiry
+	if err := u.orderRepo.UpdateOrder(ctx, order.ID, nil, nil, order.AdminNote); err != nil {
+		u.logger.WarnContext(ctx, "RenewOrder: clear custom_expires_at", slog.String("err", err.Error()))
+	}
+	if err := u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderActive); err != nil {
+		return nil, fmt.Errorf("RenewOrder: update status: %w", err)
+	}
+
+	// Log renewal event
+	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderRenewed, map[string]any{
+		"new_expires_at": newExpiry.Format(time.RFC3339),
+		"duration_days":  *product.DurationDays,
+		"amount":         renewPrice.String(),
+	})
+
+	u.logger.InfoContext(ctx, "proxy renewed",
+		slog.String("order_id", order.ID.String()),
+		slog.String("new_expires_at", newExpiry.Format(time.RFC3339)),
+	)
+
+	order.Status = domain.OrderActive
+	order.ExpiresAt = &newExpiry
+	order.CustomExpiresAt = nil
+	return order, nil
+}

@@ -108,6 +108,7 @@ const (
 	EventOrderFailed    = "order.failed"
 	EventOrderExpired   = "order.expired"   // proxy reached expiry, now in grace period
 	EventOrderDeleted   = "order.deleted"   // grace period over, proxy permanently deleted
+	EventOrderRenewed   = "order.renewed"   // user renewed during grace period
 )
 
 // OrderEvent records an action taken on a proxy order.

@@ -61,6 +61,9 @@ type IProxyProvider interface {
 	// Suspend temporarily stops a proxy without releasing it (grace period).
 	// No-op for providers that do not support suspension.
 	Suspend(ctx context.Context, providerOrderID string) error
+	// Resume re-activates a previously suspended proxy (called on renewal).
+	// No-op for providers that do not support suspension.
+	Resume(ctx context.Context, providerOrderID string) error
 	// CheckStatus checks the status of a provider order.
 	CheckStatus(ctx context.Context, providerOrderID string) (string, error)
 }

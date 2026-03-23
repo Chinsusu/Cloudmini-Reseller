@@ -54,6 +54,9 @@ func (s *SandboxAdapter) Cancel(_ context.Context, _ string) error { return nil 
 // Suspend is a no-op for sandbox.
 func (s *SandboxAdapter) Suspend(_ context.Context, _ string) error { return nil }
 
+// Resume is a no-op for sandbox.
+func (s *SandboxAdapter) Resume(_ context.Context, _ string) error { return nil }
+
 // CheckStatus always returns "active" for sandbox.
 func (s *SandboxAdapter) CheckStatus(_ context.Context, _ string) (string, error) {
 	return "active", nil

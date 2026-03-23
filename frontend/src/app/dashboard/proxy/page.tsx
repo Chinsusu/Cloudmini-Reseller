@@ -548,13 +548,16 @@ function OrderEventModal({ order, onClose }: { order: any; onClose: () => void }
 
 // ─── Orders Table ───────────────────────────────────────────────────────────────────
 const LIMIT_OPTIONS = [10, 20, 50, 100, 9999]
-function OrdersTable({ orders, onCancel, onRefresh, limit, onLimitChange }: {
-    orders: any[]; onCancel: (id: string, num: string) => void; onRefresh: () => void
+function OrdersTable({ orders, onCancel, onRenew, onRefresh, limit, onLimitChange }: {
+    orders: any[]; onCancel: (id: string, num: string) => void
+    onRenew: (id: string, num: string) => void
+    onRefresh: () => void
     limit: number; onLimitChange: (n: number) => void
 }) {
     const [revealed, setRevealed] = useState<Record<string, any>>({})
     const [editOrder, setEditOrder] = useState<any>(null)
     const [historyOrder, setHistoryOrder] = useState<any>(null)
+    const [renewingId, setRenewingId] = useState<string | null>(null)
     const { success, error: toastError } = useToast()
 
     // Auto-load credentials for all active orders
@@ -676,6 +679,7 @@ function OrdersTable({ orders, onCancel, onRefresh, limit, onLimitChange }: {
                                 const tr = exp ? timeRemaining(exp) : null
                                 const creds = revealed[o.id]
                                 const isActive = o.status === 'active'
+                                const isExpired = o.status === 'expired'
                                 const isFailed = o.status === 'failed'
                                 const effectivePrice = o.custom_price ?? o.unit_price
                                 return (
@@ -751,6 +755,17 @@ function OrdersTable({ orders, onCancel, onRefresh, limit, onLimitChange }: {
                                                     <button className="action-btn blue" style={{ fontSize: '.72rem' }}
                                                         onClick={() => handleCopy(`${creds.host}:${creds.port}@${creds.username}:${creds.password}`)} title="Copy all (host:port@user:pass)">
                                                         <Copy size={10} /> All
+                                                    </button>
+                                                )}
+                                                {isExpired && (
+                                                    <button
+                                                        className="action-btn"
+                                                        style={{ background: 'rgba(34,197,94,.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,.3)', opacity: renewingId === o.id ? .6 : 1 }}
+                                                        disabled={renewingId === o.id}
+                                                        onClick={() => onRenew(o.id, o.order_number)}
+                                                        title="Gia hạn"
+                                                    >
+                                                        {renewingId === o.id ? '...' : '🔄 Gia hạn'}
                                                     </button>
                                                 )}
                                                 {(o.status === 'active' || o.status === 'pending') && (
@@ -834,6 +849,18 @@ export default function ProxyOrdersPage() {
     const handleCancel = async (id: string, num: string) => {
         const ok = await confirm({ title: 'Hủy đơn hàng', message: `Hủy đơn ${num}? Thao tác này không thể hoàn tác.`, confirmLabel: 'Hủy đơn', variant: 'danger' })
         if (ok) cancelMut.mutate(id)
+    }
+
+    const handleRenew = async (id: string, num: string) => {
+        const ok = await confirm({ title: 'Gia hạn proxy', message: `Gia hạn ${num}? Số dư ví sẽ bị trừ theo giá gốc.`, confirmLabel: 'Gia hạn', variant: 'primary' })
+        if (!ok) return
+        try {
+            await proxyAPI.renewOrder(id)
+            success(`Đã gia hạn ${num} thành công!`)
+            qc.invalidateQueries({ queryKey: ['proxy-orders'] })
+        } catch (err: any) {
+            toastError(err?.response?.data?.error?.message ?? 'Gia hạn thất bại')
+        }
     }
 
     const typeFilters = [
@@ -940,7 +967,7 @@ export default function ProxyOrdersPage() {
                         </div>
                     ) : (
                         <>
-                            <OrdersTable orders={orders} onCancel={handleCancel} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
+                            <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
                             <Pagination
                                 page={page}
                                 totalPages={meta.total_pages ?? 1}

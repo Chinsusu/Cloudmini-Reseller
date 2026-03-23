@@ -85,6 +85,9 @@ func (a *Adapter) CheckStatus(ctx context.Context, providerOrderID string) (stri
 // Proxy-Cheap orders expire naturally; grace-period tracking is done in Cloudmini only.
 func (a *Adapter) Suspend(_ context.Context, _ string) error { return nil }
 
+// Resume is a no-op for Proxy-Cheap — no resume API available.
+func (a *Adapter) Resume(_ context.Context, _ string) error { return nil }
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // buildExecuteRequest converts a PurchaseRequest to a Proxy-Cheap ExecuteRequest.
