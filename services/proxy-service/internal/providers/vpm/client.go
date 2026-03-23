@@ -160,41 +160,53 @@ func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([
 }
 
 // GetProxyV2 returns details of a proxy by ID.
-// GET /api/v2/proxies/{id}?access_code=<key>
+// GET /api/v2/ipv4/{id}?access_code=<key>
 func (c *Client) GetProxyV2(ctx context.Context, proxyID string) (*ProxySummaryV2, error) {
 	var out ProxySummaryV2
-	if err := c.do(ctx, http.MethodGet, "/api/v2/proxies/"+proxyID, nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/v2/ipv4/"+proxyID, nil, &out); err != nil {
 		return nil, fmt.Errorf("vpm.GetProxyV2: %w", err)
 	}
 	return &out, nil
 }
 
 // DeleteProxyV2 permanently removes a proxy.
-// DELETE /api/v2/proxies/{id}?access_code=<key>  →  204 No Content
-// For protocol="default", caller must delete both id AND pair_id separately.
+// DELETE /api/v2/ipv4/{id}?access_code=<key>  →  204 No Content
+// For protocol="default", a SINGLE DELETE removes both HTTP and SOCKS5 inbounds.
+// Only the first/any ID of the pair needs to be provided.
 func (c *Client) DeleteProxyV2(ctx context.Context, proxyID string) error {
-	if err := c.do(ctx, http.MethodDelete, "/api/v2/proxies/"+proxyID, nil, nil); err != nil {
+	if err := c.do(ctx, http.MethodDelete, "/api/v2/ipv4/"+proxyID, nil, nil); err != nil {
 		return fmt.Errorf("vpm.DeleteProxyV2: %w", err)
 	}
 	return nil
 }
 
 // SuspendProxyV2 suspends a proxy without releasing its port allocation.
-// POST /api/v2/proxies/{id}/suspend?access_code=<key>
+// POST /api/v2/ipv4/{id}/suspend?access_code=<key>
 func (c *Client) SuspendProxyV2(ctx context.Context, proxyID string) error {
-	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies/"+proxyID+"/suspend", nil, nil); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/suspend", nil, nil); err != nil {
 		return fmt.Errorf("vpm.SuspendProxyV2: %w", err)
 	}
 	return nil
 }
 
 // ResumeProxyV2 re-activates a suspended proxy.
-// POST /api/v2/proxies/{id}/resume?access_code=<key>
+// POST /api/v2/ipv4/{id}/resume?access_code=<key>
 func (c *Client) ResumeProxyV2(ctx context.Context, proxyID string) error {
-	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies/"+proxyID+"/resume", nil, nil); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/resume", nil, nil); err != nil {
 		return fmt.Errorf("vpm.ResumeProxyV2: %w", err)
 	}
 	return nil
+}
+
+// ListGroups returns all proxy regions/groups.
+// GET /api/v1/groups?access_code=<key>
+// Use the returned id as group_id when creating proxies.
+func (c *Client) ListGroups(ctx context.Context) ([]ProxyGroup, error) {
+	var out []ProxyGroup
+	if err := c.do(ctx, http.MethodGet, "/api/v1/groups", nil, &out); err != nil {
+		return nil, fmt.Errorf("vpm.ListGroups: %w", err)
+	}
+	return out, nil
 }
 
 // ─── API v1 Methods (legacy — kept for backward compat) ───────────────────────

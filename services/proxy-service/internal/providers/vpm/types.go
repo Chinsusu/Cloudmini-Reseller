@@ -51,6 +51,13 @@ func (s *ProxySummaryV2) effectiveProtocol() string {
 	return "socks5"
 }
 
+// ProxyGroup is one region/group returned by GET /api/v1/groups.
+type ProxyGroup struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id"` // nil for top-level regions
+}
+
 // ─── API v1 Types (kept for backward compat with existing provider_order_ids) ──
 
 // CreateProxyRequest is the v1 request body for POST /api/v1/proxies (DEPRECATED).

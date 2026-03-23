@@ -134,48 +134,43 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 
 // Cancel permanently deletes proxy(ies) from VPM.
-// For paired proxies (protocol=default), providerOrderID is "id1|id2" — both are deleted.
+// DELETE /api/v2/ipv4/{id} — a single DELETE removes both HTTP and SOCKS5 inbounds
+// for default-protocol proxies. Only the first ID needs to be provided.
+// ProviderOrderID may be "id1|id2" (legacy) — only id1 is used.
 // Legacy v1 IDs (plain UUID) fall back to DeleteProxy v1.
 func (a *Adapter) Cancel(ctx context.Context, providerOrderID string) error {
-	ids := splitIDs(providerOrderID)
-	var lastErr error
-	for _, id := range ids {
-		if err := a.client.DeleteProxyV2(ctx, id); err != nil {
-			// Try v1 fallback for legacy orders
-			if ferr := a.client.DeleteProxy(ctx, id); ferr != nil {
-				lastErr = mapError(err)
-			}
+	id := firstID(providerOrderID)
+	if err := a.client.DeleteProxyV2(ctx, id); err != nil {
+		// Fallback to v1 for legacy orders
+		if ferr := a.client.DeleteProxy(ctx, id); ferr != nil {
+			return mapError(err)
 		}
 	}
-	return lastErr
+	return nil
 }
 
 // ─── Suspend ──────────────────────────────────────────────────────────────────
 
-// Suspend calls POST /api/v2/proxies/{id}/suspend for each proxy in the pair.
+// Suspend calls POST /api/v2/ipv4/{id}/suspend.
+// For default-protocol proxies, suspending the first ID suspends the whole pair.
 // Legacy v1 IDs fall back to StopProxy.
 func (a *Adapter) Suspend(ctx context.Context, providerOrderID string) error {
-	ids := splitIDs(providerOrderID)
-	for _, id := range ids {
-		if err := a.client.SuspendProxyV2(ctx, id); err != nil {
-			// Fallback to v1 stop
-			_ = a.client.StopProxy(ctx, id)
-		}
+	id := firstID(providerOrderID)
+	if err := a.client.SuspendProxyV2(ctx, id); err != nil {
+		_ = a.client.StopProxy(ctx, id) // v1 fallback
 	}
 	return nil
 }
 
 // ─── Resume ───────────────────────────────────────────────────────────────────
 
-// Resume calls POST /api/v2/proxies/{id}/resume for each proxy in the pair.
+// Resume calls POST /api/v2/ipv4/{id}/resume.
+// For default-protocol proxies, resuming the first ID resumes the whole pair.
 // Legacy v1 IDs fall back to StartProxy.
 func (a *Adapter) Resume(ctx context.Context, providerOrderID string) error {
-	ids := splitIDs(providerOrderID)
-	for _, id := range ids {
-		if err := a.client.ResumeProxyV2(ctx, id); err != nil {
-			// Fallback to v1 start
-			_ = a.client.StartProxy(ctx, id)
-		}
+	id := firstID(providerOrderID)
+	if err := a.client.ResumeProxyV2(ctx, id); err != nil {
+		_ = a.client.StartProxy(ctx, id) // v1 fallback
 	}
 	return nil
 }
