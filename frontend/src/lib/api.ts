@@ -72,7 +72,14 @@ export const authAPI = {
         api.post('/v1/auth/login', { email, password }),
     register: (email: string, password: string, fullName: string) =>
         api.post('/v1/auth/register', { email, password, full_name: fullName }),
-    logout: () => api.post('/v1/auth/logout'),
+    logout: () => {
+        const refresh = Cookies.get('pvp_refresh')
+        // Server requires refresh_token in body to revoke the session.
+        // If cookie is missing (already expired), skip the server call — just clear locally.
+        return refresh
+            ? api.post('/v1/auth/logout', { refresh_token: refresh })
+            : Promise.resolve()
+    },
     forgotPassword: (email: string) => api.post('/v1/auth/forgot-password', { email }),
     me: () => api.get('/v1/users/me'),
     updateMe: (data: { full_name: string; phone: string }) => api.put('/v1/users/me', data),
