@@ -106,6 +106,8 @@ const (
 	EventOrderCancelled = "order.cancelled"
 	EventOrderPatched   = "order.patched"
 	EventOrderFailed    = "order.failed"
+	EventOrderExpired   = "order.expired"   // proxy reached expiry, now in grace period
+	EventOrderDeleted   = "order.deleted"   // grace period over, proxy permanently deleted
 )
 
 // OrderEvent records an action taken on a proxy order.
@@ -139,6 +141,12 @@ type IOrderRepository interface {
 	UpdateOrder(ctx context.Context, id uuid.UUID, customPrice *decimal.Decimal, customExpiresAt *time.Time, adminNote string) error
 	ListByUser(ctx context.Context, userID uuid.UUID, offset, limit int) ([]*Order, int, error)
 	ListExpiring(ctx context.Context, within time.Duration) ([]*Order, error)
+	// ListExpiredActive returns active orders whose effective expiry (custom_expires_at ?? expires_at) has passed.
+	// These should be moved to 'expired' status and suspended at the provider.
+	ListExpiredActive(ctx context.Context) ([]*Order, error)
+	// ListExpiredGrace returns orders in 'expired' status whose effective expiry + grace has passed.
+	// These should be permanently cancelled and deleted from the provider.
+	ListExpiredGrace(ctx context.Context, grace time.Duration) ([]*Order, error)
 }
 
 // IEventPublisher publishes proxy events to NATS.

@@ -11,6 +11,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-03-23
+
+### Added
+- **proxy-service** Expiry lifecycle scheduler (runs every 15 minutes):
+  - `ExpiryUsecase.ProcessExpired`: active orders past `COALESCE(custom_expires_at, expires_at)` →
+    status `expired` + VPM `POST /proxies/{id}/stop` (suspends port; no data lost)
+  - `ExpiryUsecase.ProcessGraceExpired`: expired orders past 72h grace →
+    status `cancelled` + VPM `DELETE /proxies/{id}` (permanent delete, no refund)
+  - Log events: `order.expired`, `order.deleted`
+- **proxy-service** `IProxyProvider.Suspend(ctx, providerOrderID)` method:
+  - VPM: calls `POST /proxies/{id}/stop`
+  - Proxy-Cheap, Sandbox: no-op (providers có không có suspend API)
+- **proxy-service** `OrderRepository.ListExpiredActive` + `ListExpiredGrace` queries —
+  dùng `COALESCE(custom_expires_at, expires_at)` để tôn trọng admin override
+
+### Fixed
+- **frontend** `EditOrderModal`: giá không còn bị hiện strikethrough sai khi admin chỉ sửa expiry
+  - Before: `price` state init từ `unit_price` → `custom_price` được gửi lên = unit_price → strikethrough
+  - After: `price` state init từ `custom_price ?? ''` → chỉ gửi nếu user thực sự nhập giá mới
+
+---
+
 ## [0.11.0] — 2026-03-23
 
 ### Added

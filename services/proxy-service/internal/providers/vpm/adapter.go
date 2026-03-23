@@ -110,6 +110,15 @@ func (a *Adapter) Cancel(ctx context.Context, providerOrderID string) error {
 	return nil
 }
 
+// Suspend calls POST /api/v1/proxies/{id}/stop, temporarily suspending the proxy
+// without releasing the port/IP (used during the 3-day grace period after expiry).
+func (a *Adapter) Suspend(ctx context.Context, providerOrderID string) error {
+	if err := a.client.StopProxy(ctx, providerOrderID); err != nil {
+		return mapError(err)
+	}
+	return nil
+}
+
 // CheckStatus calls GET /api/v1/proxies/{id} and maps VPM status to Cloudmini constants.
 //
 // VPM status → Cloudmini:

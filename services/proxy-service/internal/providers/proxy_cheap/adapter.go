@@ -81,6 +81,10 @@ func (a *Adapter) CheckStatus(ctx context.Context, providerOrderID string) (stri
 	return mapStatus(proxies[0].Status), nil
 }
 
+// Suspend is a no-op for Proxy-Cheap — the provider does not expose a suspend API.
+// Proxy-Cheap orders expire naturally; grace-period tracking is done in Cloudmini only.
+func (a *Adapter) Suspend(_ context.Context, _ string) error { return nil }
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // buildExecuteRequest converts a PurchaseRequest to a Proxy-Cheap ExecuteRequest.

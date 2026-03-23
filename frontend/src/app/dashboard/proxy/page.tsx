@@ -371,7 +371,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
 // ─── Edit Order Modal ──────────────────────────────────────────────────────────
 function EditOrderModal({ order, onClose, onSaved }: { order: any; onClose: () => void; onSaved: () => void }) {
     const { success, error: toastError } = useToast()
-    const [price, setPrice] = useState(order.custom_price ?? order.unit_price ?? '')
+    const [price, setPrice] = useState(order.custom_price ?? '')  // do NOT fall back to unit_price
     const [expiry, setExpiry] = useState(
         order.custom_expires_at
             ? new Date(order.custom_expires_at).toISOString().slice(0, 16)

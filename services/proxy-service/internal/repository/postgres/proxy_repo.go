@@ -148,6 +148,39 @@ func (r *OrderRepository) ListExpiring(ctx context.Context, within time.Duration
 	return orders, nil
 }
 
+// ListExpiredActive returns active orders whose effective expiry (COALESCE(custom_expires_at, expires_at))
+// has already passed. These are candidates for the first expiry step: stop + move to 'expired'.
+func (r *OrderRepository) ListExpiredActive(ctx context.Context) ([]*domain.Order, error) {
+	var orders []*domain.Order
+	if err := r.db.SelectContext(ctx, &orders,
+		orderSelectCOALESCE+`
+		WHERE status = 'active'
+		  AND COALESCE(custom_expires_at, expires_at) IS NOT NULL
+		  AND COALESCE(custom_expires_at, expires_at) < NOW()`,
+	); err != nil {
+		return nil, fmt.Errorf("OrderRepository.ListExpiredActive: %w", err)
+	}
+	return orders, nil
+}
+
+// ListExpiredGrace returns expired orders whose effective expiry + grace period has passed.
+// These are candidates for permanent deletion from the provider.
+func (r *OrderRepository) ListExpiredGrace(ctx context.Context, grace time.Duration) ([]*domain.Order, error) {
+	cutoff := time.Now().Add(-grace) // grace ago = must have expired before this time
+	var orders []*domain.Order
+	if err := r.db.SelectContext(ctx, &orders,
+		orderSelectCOALESCE+`
+		WHERE status = 'expired'
+		  AND COALESCE(custom_expires_at, expires_at) IS NOT NULL
+		  AND COALESCE(custom_expires_at, expires_at) < $1`,
+		cutoff,
+	); err != nil {
+		return nil, fmt.Errorf("OrderRepository.ListExpiredGrace: %w", err)
+	}
+	return orders, nil
+}
+
+
 // ─── ProductRepository ─────────────────────────────────────────────────────────
 
 type ProductRepository struct{ db *sqlx.DB }

@@ -51,6 +51,9 @@ func (s *SandboxAdapter) Purchase(ctx context.Context, req PurchaseRequest) (*Pu
 // Cancel is a no-op for sandbox.
 func (s *SandboxAdapter) Cancel(_ context.Context, _ string) error { return nil }
 
+// Suspend is a no-op for sandbox.
+func (s *SandboxAdapter) Suspend(_ context.Context, _ string) error { return nil }
+
 // CheckStatus always returns "active" for sandbox.
 func (s *SandboxAdapter) CheckStatus(_ context.Context, _ string) (string, error) {
 	return "active", nil

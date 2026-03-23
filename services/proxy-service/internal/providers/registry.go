@@ -56,8 +56,11 @@ type IProxyProvider interface {
 	// Purchase buys proxy units from the provider.
 	// Returns PurchaseResult.Credentials == nil for async providers.
 	Purchase(ctx context.Context, req PurchaseRequest) (*PurchaseResult, error)
-	// Cancel cancels/releases a previously purchased order.
+	// Cancel cancels/releases a previously purchased order (permanent).
 	Cancel(ctx context.Context, providerOrderID string) error
+	// Suspend temporarily stops a proxy without releasing it (grace period).
+	// No-op for providers that do not support suspension.
+	Suspend(ctx context.Context, providerOrderID string) error
 	// CheckStatus checks the status of a provider order.
 	CheckStatus(ctx context.Context, providerOrderID string) (string, error)
 }

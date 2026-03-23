@@ -115,6 +115,11 @@ func main() {
 		registry, billingClient, cipher, eventPub, orderEvtRepo, log,
 	)
 
+	// Expiry lifecycle: check expired orders every 15 minutes
+	expiryUC := usecase.NewExpiryUsecase(
+		orderRepo, registry, orderEvtRepo, usecase.DefaultGracePeriod, log,
+	)
+
 	webhookUC := usecase.NewWebhookUsecase(
 		orderRepo, productRepo, billingClient, cipher, eventPub, orderEvtRepo, log,
 	)
@@ -146,6 +151,27 @@ func main() {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Background expiry scheduler — runs every 15 minutes
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		log.Info("expiry scheduler started", slog.String("grace_period", usecase.DefaultGracePeriod.String()))
+		for {
+			select {
+			case <-quit:
+				return
+			case <-ticker.C:
+				bgCtx := context.Background()
+				if err := expiryUC.ProcessExpired(bgCtx); err != nil {
+					log.Error("expiry scheduler: ProcessExpired", slog.String("error", err.Error()))
+				}
+				if err := expiryUC.ProcessGraceExpired(bgCtx); err != nil {
+					log.Error("expiry scheduler: ProcessGraceExpired", slog.String("error", err.Error()))
+				}
+			}
+		}
+	}()
 
 	go func() {
 		log.Info("proxy-service starting", slog.String("port", port))
