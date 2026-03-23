@@ -16,7 +16,8 @@ const (
 )
 
 // Client handles HTTP communication with the VPM API.
-// Authentication uses Bearer token in the Authorization header.
+// API v2: authentication uses ?access_code=<key> query parameter.
+// API v1: authentication used Authorization: Bearer <key> header (legacy fallback).
 type Client struct {
 	baseURL    string
 	apiKey     string
@@ -40,6 +41,7 @@ func NewClientWithHTTP(baseURL, apiKey string, httpClient *http.Client) *Client 
 }
 
 // do executes an authenticated HTTP request to VPM.
+// v2 API: injects ?access_code= query parameter for auth.
 // body may be nil for requests without payload. out may be nil to discard response.
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
 	var reqBody io.Reader
@@ -53,24 +55,36 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 		reqBody = bytes.NewReader(b)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	// Build URL with access_code query param (v2 auth)
+	url := c.baseURL + path
+	if c.apiKey != "" {
+		sep := "?"
+		for _, ch := range path {
+			if ch == '?' {
+				sep = "&"
+				break
+			}
+		}
+		url += sep + "access_code=" + c.apiKey
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
 	if err != nil {
 		return fmt.Errorf("vpm: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	// Also send Bearer for v1 endpoints (backward compat)
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			// Exponential backoff: 1s, 2s
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-time.After(time.Duration(1<<uint(attempt-1)) * time.Second):
 			}
-			// Re-set body for retry (already consumed)
 			if bodyBytes != nil {
 				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			}
@@ -129,10 +143,63 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	return lastErr
 }
 
-// ─── Proxy Methods ────────────────────────────────────────────────────────────
+// ─── API v2 Methods (current) ─────────────────────────────────────────────────
 
-// CreateProxy allocates a new proxy on VPM.
-// POST /api/v1/proxies
+// CreateProxyV2 allocates one or more proxies on VPM.
+// POST /api/v2/proxies?access_code=<key>
+// Returns an array of ProxySummaryV2.
+func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([]ProxySummaryV2, error) {
+	if req.Count == 0 {
+		req.Count = 1
+	}
+	var out []ProxySummaryV2
+	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies", req, &out); err != nil {
+		return nil, fmt.Errorf("vpm.CreateProxyV2: %w", err)
+	}
+	return out, nil
+}
+
+// GetProxyV2 returns details of a proxy by ID.
+// GET /api/v2/proxies/{id}?access_code=<key>
+func (c *Client) GetProxyV2(ctx context.Context, proxyID string) (*ProxySummaryV2, error) {
+	var out ProxySummaryV2
+	if err := c.do(ctx, http.MethodGet, "/api/v2/proxies/"+proxyID, nil, &out); err != nil {
+		return nil, fmt.Errorf("vpm.GetProxyV2: %w", err)
+	}
+	return &out, nil
+}
+
+// DeleteProxyV2 permanently removes a proxy.
+// DELETE /api/v2/proxies/{id}?access_code=<key>  →  204 No Content
+// For protocol="default", caller must delete both id AND pair_id separately.
+func (c *Client) DeleteProxyV2(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodDelete, "/api/v2/proxies/"+proxyID, nil, nil); err != nil {
+		return fmt.Errorf("vpm.DeleteProxyV2: %w", err)
+	}
+	return nil
+}
+
+// SuspendProxyV2 suspends a proxy without releasing its port allocation.
+// POST /api/v2/proxies/{id}/suspend?access_code=<key>
+func (c *Client) SuspendProxyV2(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies/"+proxyID+"/suspend", nil, nil); err != nil {
+		return fmt.Errorf("vpm.SuspendProxyV2: %w", err)
+	}
+	return nil
+}
+
+// ResumeProxyV2 re-activates a suspended proxy.
+// POST /api/v2/proxies/{id}/resume?access_code=<key>
+func (c *Client) ResumeProxyV2(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies/"+proxyID+"/resume", nil, nil); err != nil {
+		return fmt.Errorf("vpm.ResumeProxyV2: %w", err)
+	}
+	return nil
+}
+
+// ─── API v1 Methods (legacy — kept for backward compat) ───────────────────────
+
+// CreateProxy allocates a new proxy on VPM (v1, DEPRECATED).
 func (c *Client) CreateProxy(ctx context.Context, req CreateProxyRequest) (*ProxySummary, error) {
 	var out ProxySummary
 	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies", req, &out); err != nil {
@@ -141,8 +208,7 @@ func (c *Client) CreateProxy(ctx context.Context, req CreateProxyRequest) (*Prox
 	return &out, nil
 }
 
-// DeleteProxy permanently removes a proxy, releasing its port and IP.
-// DELETE /api/v1/proxies/{id}
+// DeleteProxy permanently removes a proxy (v1, DEPRECATED).
 func (c *Client) DeleteProxy(ctx context.Context, proxyID string) error {
 	if err := c.do(ctx, http.MethodDelete, "/api/v1/proxies/"+proxyID, nil, nil); err != nil {
 		return fmt.Errorf("vpm.DeleteProxy: %w", err)
@@ -150,8 +216,7 @@ func (c *Client) DeleteProxy(ctx context.Context, proxyID string) error {
 	return nil
 }
 
-// GetProxy returns details of a proxy including status and bandwidth.
-// GET /api/v1/proxies/{id}
+// GetProxy returns details of a proxy (v1, DEPRECATED).
 func (c *Client) GetProxy(ctx context.Context, proxyID string) (*ProxySummary, error) {
 	var out ProxySummary
 	if err := c.do(ctx, http.MethodGet, "/api/v1/proxies/"+proxyID, nil, &out); err != nil {
@@ -160,8 +225,7 @@ func (c *Client) GetProxy(ctx context.Context, proxyID string) (*ProxySummary, e
 	return &out, nil
 }
 
-// StopProxy suspends a proxy without deleting it (port/IP kept reserved).
-// POST /api/v1/proxies/{id}/stop
+// StopProxy suspends a proxy (v1, DEPRECATED — use SuspendProxyV2).
 func (c *Client) StopProxy(ctx context.Context, proxyID string) error {
 	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies/"+proxyID+"/stop", nil, nil); err != nil {
 		return fmt.Errorf("vpm.StopProxy: %w", err)
@@ -169,8 +233,7 @@ func (c *Client) StopProxy(ctx context.Context, proxyID string) error {
 	return nil
 }
 
-// StartProxy re-activates a stopped proxy.
-// POST /api/v1/proxies/{id}/start
+// StartProxy re-activates a stopped proxy (v1, DEPRECATED — use ResumeProxyV2).
 func (c *Client) StartProxy(ctx context.Context, proxyID string) error {
 	if err := c.do(ctx, http.MethodPost, "/api/v1/proxies/"+proxyID+"/start", nil, nil); err != nil {
 		return fmt.Errorf("vpm.StartProxy: %w", err)
