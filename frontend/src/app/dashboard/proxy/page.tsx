@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { proxyAPI } from '@/lib/api'
+import { proxyAPI, adminAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
@@ -22,6 +22,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
     failed:     { label: 'Failed',      cls: 'badge-error' },
     expired:    { label: 'Expired',     cls: 'badge-terminated' },
     refunded:   { label: 'Refunded',    cls: 'badge-terminated' },
+    suspended:  { label: '🔒 Suspended', cls: 'badge-error' },
 }
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
@@ -548,9 +549,11 @@ function OrderEventModal({ order, onClose }: { order: any; onClose: () => void }
 
 // ─── Orders Table ───────────────────────────────────────────────────────────────────
 const LIMIT_OPTIONS = [10, 20, 50, 100, 9999]
-function OrdersTable({ orders, onCancel, onRenew, onRefresh, limit, onLimitChange }: {
+function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, limit, onLimitChange }: {
     orders: any[]; onCancel: (id: string, num: string) => void
     onRenew: (id: string, num: string) => void
+    onLock?: (id: string, num: string) => void
+    onUnlock?: (id: string, num: string) => void
     onRefresh: () => void
     limit: number; onLimitChange: (n: number) => void
 }) {
@@ -680,6 +683,7 @@ function OrdersTable({ orders, onCancel, onRenew, onRefresh, limit, onLimitChang
                                 const creds = revealed[o.id]
                                 const isActive = o.status === 'active'
                                 const isExpired = o.status === 'expired'
+                                const isSuspended = o.status === 'suspended'
                                 const isFailed = o.status === 'failed'
                                 const effectivePrice = o.custom_price ?? o.unit_price
                                 return (
@@ -766,6 +770,27 @@ function OrdersTable({ orders, onCancel, onRenew, onRefresh, limit, onLimitChang
                                                         title="Gia hạn"
                                                     >
                                                         {renewingId === o.id ? '...' : '🔄 Gia hạn'}
+                                                    </button>
+                                                )}
+                                                {/* Admin lock/unlock */}
+                                                {onLock && (isActive || isExpired) && (
+                                                    <button
+                                                        className="action-btn"
+                                                        style={{ background: 'rgba(239,68,68,.12)', color: '#f87171', border: '1px solid rgba(239,68,68,.3)', fontSize: '.72rem' }}
+                                                        onClick={() => onLock(o.id, o.order_number)}
+                                                        title="Khóa proxy (admin)"
+                                                    >
+                                                        🔒 Lock
+                                                    </button>
+                                                )}
+                                                {onUnlock && isSuspended && (
+                                                    <button
+                                                        className="action-btn"
+                                                        style={{ background: 'rgba(34,197,94,.12)', color: '#4ade80', border: '1px solid rgba(34,197,94,.3)', fontSize: '.72rem' }}
+                                                        onClick={() => onUnlock(o.id, o.order_number)}
+                                                        title="Mở khóa proxy (admin)"
+                                                    >
+                                                        🔓 Unlock
                                                     </button>
                                                 )}
                                                 {(o.status === 'active' || o.status === 'pending') && (
@@ -860,6 +885,30 @@ export default function ProxyOrdersPage() {
             qc.invalidateQueries({ queryKey: ['proxy-orders'] })
         } catch (err: any) {
             toastError(err?.response?.data?.error?.message ?? 'Gia hạn thất bại')
+        }
+    }
+
+    const handleLockOrder = async (id: string, num: string) => {
+        const ok = await confirm({ title: '🔒 Khóa proxy', message: `Lock ${num}? Proxy sẽ bị tạm ngưng, user không thể sử dụng.`, confirmLabel: 'Lock', variant: 'danger' })
+        if (!ok) return
+        try {
+            await adminAPI.orderAction(id, 'lock')
+            success(`Đã lock ${num}`)
+            qc.invalidateQueries({ queryKey: ['proxy-orders'] })
+        } catch (err: any) {
+            toastError(err?.response?.data?.error?.message ?? 'Lock thất bại')
+        }
+    }
+
+    const handleUnlockOrder = async (id: string, num: string) => {
+        const ok = await confirm({ title: '🔓 Mở khóa proxy', message: `Unlock ${num}? Proxy sẽ được khôi phục.`, confirmLabel: 'Unlock', variant: 'primary' })
+        if (!ok) return
+        try {
+            await adminAPI.orderAction(id, 'unlock')
+            success(`Đã unlock ${num}`)
+            qc.invalidateQueries({ queryKey: ['proxy-orders'] })
+        } catch (err: any) {
+            toastError(err?.response?.data?.error?.message ?? 'Unlock thất bại')
         }
     }
 
@@ -967,7 +1016,7 @@ export default function ProxyOrdersPage() {
                         </div>
                     ) : (
                         <>
-                            <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
+                            <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onLock={handleLockOrder} onUnlock={handleUnlockOrder} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
                             <Pagination
                                 page={page}
                                 totalPages={meta.total_pages ?? 1}

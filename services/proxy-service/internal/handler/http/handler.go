@@ -21,6 +21,7 @@ import (
 // Handler holds proxy usecase dependencies.
 type Handler struct {
 	orderUC          *usecase.OrderUsecase
+	lockUC           *usecase.LockUsecase
 	orderRepo        domain.IOrderRepository
 	orderEvtRepo     domain.IOrderEventRepository
 	productRepo      domain.IProductRepository
@@ -30,8 +31,8 @@ type Handler struct {
 	logger           *slog.Logger
 }
 
-func NewHandler(orderUC *usecase.OrderUsecase, orderRepo domain.IOrderRepository, orderEvtRepo domain.IOrderEventRepository, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
-	return &Handler{orderUC: orderUC, orderRepo: orderRepo, orderEvtRepo: orderEvtRepo, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
+func NewHandler(orderUC *usecase.OrderUsecase, lockUC *usecase.LockUsecase, orderRepo domain.IOrderRepository, orderEvtRepo domain.IOrderEventRepository, productRepo domain.IProductRepository, providerRepo domain.IProviderRepository, webhookHandler http.Handler, logger *slog.Logger) *Handler {
+	return &Handler{orderUC: orderUC, lockUC: lockUC, orderRepo: orderRepo, orderEvtRepo: orderEvtRepo, productRepo: productRepo, providerRepo: providerRepo, webhookHandler: webhookHandler, logger: logger}
 }
 
 // WithProxyCheapClient injects the proxy-cheap client into the handler (for service-options endpoint).
@@ -399,6 +400,42 @@ func (h *Handler) AdminGetUserOrders(w http.ResponseWriter, r *http.Request) {
 	apierror.RespondJSONWithMeta(w, http.StatusOK, orders, pagination.NewMeta(p, total))
 }
 
+// AdminOrderAction handles PUT /api/v1/admin/proxy/orders/{id}/action
+// body: {"action": "lock"|"unlock", "reason": "optional note"}
+// lock  → suspend proxy at provider + status "suspended"
+// unlock → resume proxy at provider + status "active"
+func (h *Handler) AdminOrderAction(w http.ResponseWriter, r *http.Request) {
+	orderID := mustParseUUID(chi.URLParam(r, "id"))
+
+	var req struct {
+		Action string `json:"action"` // "lock" | "unlock"
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+
+	lockReq := usecase.LockOrderRequest{OrderID: orderID, Reason: req.Reason}
+
+	var err error
+	switch req.Action {
+	case "lock":
+		err = h.lockUC.LockOrder(r.Context(), lockReq)
+	case "unlock":
+		err = h.lockUC.UnlockOrder(r.Context(), lockReq)
+	default:
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "action must be 'lock' or 'unlock'")
+		return
+	}
+
+	if err != nil {
+		h.handleError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 // NewRouter builds the chi router for proxy-service.
@@ -443,6 +480,9 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Get("/providers", h.AdminListProviders)
 				r.Get("/service-options", h.AdminGetServiceOptions)
 				r.Get("/user-orders", h.AdminGetUserOrders)
+				// PUT /api/v1/admin/proxy/orders/{id}/action
+				// body: {"action": "lock"|"unlock", "reason": "..."}
+				r.Put("/orders/{id}/action", h.AdminOrderAction)
 			})
 		})
 	})

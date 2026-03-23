@@ -13,13 +13,14 @@ import (
 
 // Order status constants.
 const (
-	OrderPending     = "pending"     // payment not yet confirmed
-	OrderProcessing  = "processing"  // paid, waiting for async provider activation
-	OrderActive      = "active"      // proxy is live and credentials are available
-	OrderExpired     = "expired"     // proxy lifetime ended
-	OrderCancelled   = "cancelled"   // cancelled by user or admin
-	OrderFailed      = "failed"      // provider purchase failed
-	OrderRefunded    = "refunded"    // refunded to wallet
+	OrderPending    = "pending"     // payment not yet confirmed
+	OrderProcessing = "processing"  // paid, waiting for async provider activation
+	OrderActive     = "active"      // proxy is live and credentials are available
+	OrderExpired    = "expired"     // proxy lifetime ended
+	OrderCancelled  = "cancelled"   // cancelled by user or admin
+	OrderFailed     = "failed"      // provider purchase failed
+	OrderRefunded   = "refunded"    // refunded to wallet
+	OrderSuspended  = "suspended"   // admin locked — proxy stopped at provider, user cannot use it
 )
 
 // Provider entity.
@@ -109,6 +110,8 @@ const (
 	EventOrderExpired   = "order.expired"   // proxy reached expiry, now in grace period
 	EventOrderDeleted   = "order.deleted"   // grace period over, proxy permanently deleted
 	EventOrderRenewed   = "order.renewed"   // user renewed during grace period
+	EventOrderLocked    = "order.locked"    // admin locked (suspended) proxy
+	EventOrderUnlocked  = "order.unlocked"  // admin unlocked (resumed) proxy
 )
 
 // OrderEvent records an action taken on a proxy order.

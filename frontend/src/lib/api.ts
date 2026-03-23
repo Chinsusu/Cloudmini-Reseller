@@ -169,6 +169,9 @@ export const adminAPI = {
     getUserWallet: (userId: string) => api.get(`/v1/admin/billing/wallet?user_id=${userId}`),
     getUserProxyOrders: (userId: string) => api.get(`/v1/admin/proxy/user-orders?user_id=${userId}&limit=1`),
     getUserVPSInstances: (userId: string) => api.get(`/v1/admin/vps/user-instances?user_id=${userId}&limit=1`),
+    // Admin proxy order actions: lock/unlock
+    orderAction: (orderId: string, action: 'lock' | 'unlock', reason?: string) =>
+        api.put(`/v1/admin/proxy/orders/${orderId}/action`, { action, reason }),
     // Admin manual balance adjustment (reference_type="adjustment" — not counted as revenue)
     adminAdjustBalance: (userId: string, amount: number, description: string) =>
         api.post('/v1/admin/billing/adjustment', { user_id: userId, amount, description }),

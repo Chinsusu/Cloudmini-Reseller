@@ -120,6 +120,9 @@ func main() {
 		orderRepo, registry, orderEvtRepo, usecase.DefaultGracePeriod, log,
 	)
 
+	// Admin lock/unlock
+	lockUC := usecase.NewLockUsecase(orderRepo, orderEvtRepo, registry, log)
+
 	webhookUC := usecase.NewWebhookUsecase(
 		orderRepo, productRepo, billingClient, cipher, eventPub, orderEvtRepo, log,
 	)
@@ -135,7 +138,7 @@ func main() {
 
 	// ── HTTP ──────────────────────────────────────────────────────────────────
 	auditLogger := mw.NewNATSAuditLogger(natsPub, "proxy-service")
-	handler := httphandler.NewHandler(orderUC, orderRepo, orderEvtRepo, productRepo, providerRepo, webhookHTTP, log)
+	handler := httphandler.NewHandler(orderUC, lockUC, orderRepo, orderEvtRepo, productRepo, providerRepo, webhookHTTP, log)
 	if proxyCheapAPIKey != "" && proxyCheapAPISecret != "" {
 		pcClient := proxycheap.NewClient(proxyCheapAPIKey, proxyCheapAPISecret)
 		handler.WithProxyCheapClient(pcClient)
