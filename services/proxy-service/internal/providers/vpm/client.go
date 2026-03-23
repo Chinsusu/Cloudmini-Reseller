@@ -180,19 +180,21 @@ func (c *Client) DeleteProxyV2(ctx context.Context, proxyID string) error {
 	return nil
 }
 
-// SuspendProxyV2 suspends a proxy without releasing its port allocation.
-// POST /api/v2/ipv4/{id}/suspend?access_code=<key>
+// SuspendProxyV2 locks a proxy (equivalent to Stop/Suspend).
+// PUT /api/v2/ipv4/{id}?access_code=<key>  body: {"action": "lock"}
 func (c *Client) SuspendProxyV2(ctx context.Context, proxyID string) error {
-	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/suspend", nil, nil); err != nil {
+	body := map[string]string{"action": "lock"}
+	if err := c.do(ctx, http.MethodPut, "/api/v2/ipv4/"+proxyID, body, nil); err != nil {
 		return fmt.Errorf("vpm.SuspendProxyV2: %w", err)
 	}
 	return nil
 }
 
-// ResumeProxyV2 re-activates a suspended proxy.
-// POST /api/v2/ipv4/{id}/resume?access_code=<key>
+// ResumeProxyV2 unlocks a proxy (equivalent to Start/Resume).
+// PUT /api/v2/ipv4/{id}?access_code=<key>  body: {"action": "unlock"}
 func (c *Client) ResumeProxyV2(ctx context.Context, proxyID string) error {
-	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/resume", nil, nil); err != nil {
+	body := map[string]string{"action": "unlock"}
+	if err := c.do(ctx, http.MethodPut, "/api/v2/ipv4/"+proxyID, body, nil); err != nil {
 		return fmt.Errorf("vpm.ResumeProxyV2: %w", err)
 	}
 	return nil
