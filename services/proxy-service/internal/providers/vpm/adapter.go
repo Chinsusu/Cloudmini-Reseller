@@ -92,52 +92,82 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 	// Default: POST /api/v2/ipv4 with specific IP from metadata.
 	// Region-based creation (POST /api/v2/proxies with group_id) is reserved for future use.
 	ipv4 := m["ipv4"]
-	var proxies []ProxySummaryV2
+	var proxy *ProxySummaryV2
 	var err error
 	if ipv4 != "" {
-		proxies, err = a.client.CreateProxyByIPV4(ctx, ipv4, protocol)
+		proxy, err = a.client.CreateProxyByIPV4(ctx, ipv4, protocol)
 	} else {
-		proxies, err = a.client.CreateProxyV2(ctx, createReq)
+		proxy, err = a.client.CreateProxyV2(ctx, createReq)
 	}
 	if err != nil {
 		return nil, mapError(err)
 	}
-
-	if len(proxies) == 0 {
-		return nil, fmt.Errorf("%w: vpm returned empty proxy list", providers.ErrProviderUnavailable)
+	if proxy == nil || proxy.ID == "" {
+		return nil, fmt.Errorf("%w: vpm returned empty response", providers.ErrProviderUnavailable)
 	}
 
-	// Build credentials from response
-	// protocol=default → 2 entries (HTTP + SOCKS5); others → 1 entry
-	creds := make([]providers.ProxyCredential, 0, len(proxies))
-	for _, p := range proxies {
-		port := p.effectivePort()
-		if port == 0 {
-			continue
+	// Build credentials from single-object response.
+	// protocol=default → both port_http and port_socks in same object → 2 credentials.
+	// Other protocols (vmess/vless/ss/trojan/wireguard) → 1 credential using connection_string.
+	var creds []providers.ProxyCredential
+	switch proxy.Protocol {
+	case "default":
+		if proxy.PortHTTP > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host:     proxy.IPv4,
+				Port:     proxy.PortHTTP,
+				Username: proxy.Username,
+				Password: proxy.Password,
+				Protocol: "http",
+			})
 		}
+		if proxy.PortSOCKS > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host:     proxy.IPv4,
+				Port:     proxy.PortSOCKS,
+				Username: proxy.Username,
+				Password: proxy.Password,
+				Protocol: "socks5",
+			})
+		}
+	case "http":
+		if proxy.PortHTTP > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host:     proxy.IPv4,
+				Port:     proxy.PortHTTP,
+				Username: proxy.Username,
+				Password: proxy.Password,
+				Protocol: "http",
+			})
+		}
+	case "socks5":
+		if proxy.PortSOCKS > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host:     proxy.IPv4,
+				Port:     proxy.PortSOCKS,
+				Username: proxy.Username,
+				Password: proxy.Password,
+				Protocol: "socks5",
+			})
+		}
+	default:
+		// vmess, vless, shadowsocks, trojan, wireguard — use connection_string
+		port := proxy.effectivePort()
 		creds = append(creds, providers.ProxyCredential{
-			Host:     p.IPv4,
-			Port:     port,
-			Username: p.Username,
-			Password: p.Password,
-			Protocol: p.effectiveProtocol(),
+			Host:             proxy.IPv4,
+			Port:             port,
+			Username:         proxy.Username,
+			Password:         proxy.Password,
+			Protocol:         proxy.Protocol,
+			ConnectionString: proxy.ConnectionString,
 		})
 	}
 	if len(creds) == 0 {
 		return nil, fmt.Errorf("%w: vpm returned no usable credentials", providers.ErrProviderUnavailable)
 	}
 
-	// Build ProviderOrderID:
-	//   - single proxy  → plain UUID
-	//   - pair (default) → "http_id|socks_id" for safe Cancel/Suspend/Resume
-	ids := make([]string, len(proxies))
-	for i, p := range proxies {
-		ids[i] = p.ID
-	}
-	providerOrderID := strings.Join(ids, "|")
-
 	return &providers.PurchaseResult{
-		ProviderOrderID: providerOrderID,
+		ProviderOrderID: proxy.ID,
 		Credentials:     creds,
 	}, nil
 }

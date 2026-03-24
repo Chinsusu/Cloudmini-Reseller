@@ -43,12 +43,13 @@ type PurchaseResult struct {
 
 // ProxyCredential represents a single proxy credential.
 type ProxyCredential struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Protocol string `json:"protocol"`
-	Country  string `json:"country,omitempty"`
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	Username         string `json:"username"`
+	Password         string `json:"password"`
+	Protocol         string `json:"protocol"`
+	Country          string `json:"country,omitempty"`
+	ConnectionString string `json:"connection_string,omitempty"` // for vmess/vless/shadowsocks/trojan/wireguard
 }
 
 // IProxyProvider is the interface every proxy provider adapter must implement.

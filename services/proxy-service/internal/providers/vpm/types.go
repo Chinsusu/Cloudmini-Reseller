@@ -17,25 +17,23 @@ type CreateProxyV2Request struct {
 	SpeedLimitMbps   int    `json:"speed_limit_mbps,omitempty"`
 }
 
-// ProxySummaryV2 is one element in the array returned by POST/GET /api/v2/proxies.
-// When protocol="default", two entries are created sharing the same IP but different ports.
-// The second entry's id is exposed as pair_id on the first, and vice versa.
+// ProxySummaryV2 is the single-object response returned by POST/GET /api/v2/ipv4/:ipv4.
+// Note: docs v2 returns data as a SINGLE OBJECT (not an array).
 type ProxySummaryV2 struct {
-	ID               string `json:"id"`
-	IPv4             string `json:"ipv4"`
-	IPv6             string `json:"ipv6"`
-	Username         string `json:"username"`
-	Password         string `json:"password"`
-	PortHTTP         int    `json:"port_http"`  // non-null when protocol=http or default
-	PortSOCKS        int    `json:"port_socks"` // non-null when protocol=socks5 or default
-	Protocol         string `json:"protocol"`   // "http"|"socks5"|"default"
-	ConnectionString string `json:"connection_string"`
-	Status           string `json:"status"` // "completed"|"suspended"|"error"
-	PairID           string `json:"pair_id,omitempty"` // ID of the paired proxy (protocol=default only)
+	ID               string          `json:"id"`
+	IPv4             string          `json:"ipv4"`
+	IPv6             *string         `json:"ipv6"`
+	Username         string          `json:"username"`
+	Password         string          `json:"password"`
+	PortHTTP         int             `json:"port_http"`  // >0 for http/default protocols
+	PortSOCKS        int             `json:"port_socks"` // >0 for socks5/default protocols
+	Protocol         string          `json:"protocol"`   // "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"|"wireguard"
+	ProtocolConfig   json.RawMessage `json:"protocol_config"` // protocol-specific config (VMess/VLESS/SS/Trojan/WireGuard)
+	ConnectionString string          `json:"connection_string"`
+	Status           string          `json:"status"` // "completed"|"suspended"|"error"
 }
 
-// effectivePort returns the correct port for the given protocol.
-// For protocol="default" we use PortHTTP; callers can override.
+// effectivePort returns the port for credential building.
 func (s *ProxySummaryV2) effectivePort() int {
 	if s.PortHTTP > 0 {
 		return s.PortHTTP
@@ -43,12 +41,16 @@ func (s *ProxySummaryV2) effectivePort() int {
 	return s.PortSOCKS
 }
 
-// effectiveProtocol returns the human-readable protocol string for credentials.
+// effectiveProtocol returns the protocol string for credentials.
 func (s *ProxySummaryV2) effectiveProtocol() string {
-	if s.PortHTTP > 0 {
+	switch s.Protocol {
+	case "default", "http":
 		return "http"
+	case "socks5":
+		return "socks5"
+	default:
+		return s.Protocol // vmess, vless, shadowsocks, trojan, wireguard
 	}
-	return "socks5"
 }
 
 // ProxyGroup is one region/group returned by GET /api/v1/groups.

@@ -145,29 +145,28 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 
 // ─── API v2 Methods (current) ─────────────────────────────────────────────────
 
-// CreateProxyV2 allocates proxies from a region pool.
+// CreateProxyV2 allocates a proxy from a region pool.
 // POST /api/v2/proxies?access_code=<key> — used when group_id/region is specified.
-func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([]ProxySummaryV2, error) {
-	if req.Count == 0 {
-		req.Count = 1
-	}
-	var out []ProxySummaryV2
+// Returns a single ProxySummaryV2 object.
+func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) (*ProxySummaryV2, error) {
+	var out ProxySummaryV2
 	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies", req, &out); err != nil {
 		return nil, fmt.Errorf("vpm.CreateProxyV2: %w", err)
 	}
-	return out, nil
+	return &out, nil
 }
 
-// CreateProxyByIPV4 allocates a proxy for a specific IP address (default endpoint).
+// CreateProxyByIPV4 allocates a proxy for a specific IP address (primary endpoint).
 // POST /api/v2/ipv4?access_code=<key>
-// body: {"ipv4": "<ip>", "protocol": "default"|"http"|"socks5"}
-func (c *Client) CreateProxyByIPV4(ctx context.Context, ipv4, protocol string) ([]ProxySummaryV2, error) {
+// body: {"ipv4": "<ip>", "protocol": "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"|"wireguard"}
+// Returns a single ProxySummaryV2 object (not an array).
+func (c *Client) CreateProxyByIPV4(ctx context.Context, ipv4, protocol string) (*ProxySummaryV2, error) {
 	body := map[string]string{"ipv4": ipv4, "protocol": protocol}
-	var out []ProxySummaryV2
+	var out ProxySummaryV2
 	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4", body, &out); err != nil {
 		return nil, fmt.Errorf("vpm.CreateProxyByIPV4: %w", err)
 	}
-	return out, nil
+	return &out, nil
 }
 
 // GetProxyV2 returns details of a proxy by ID.
@@ -191,8 +190,8 @@ func (c *Client) DeleteProxyV2(ctx context.Context, proxyID string) error {
 	return nil
 }
 
-// SuspendProxyV2 locks a proxy (equivalent to Stop/Suspend).
-// PUT /api/v2/ipv4/{id}?access_code=<key>  body: {"action": "lock"}
+// SuspendProxyV2 locks a proxy (admin: suspend UX).
+// PUT /api/v2/ipv4/{ipv4}?access_code=<key>  body: {"action": "lock"}
 func (c *Client) SuspendProxyV2(ctx context.Context, proxyID string) error {
 	body := map[string]string{"action": "lock"}
 	if err := c.do(ctx, http.MethodPut, "/api/v2/ipv4/"+proxyID, body, nil); err != nil {
@@ -201,12 +200,30 @@ func (c *Client) SuspendProxyV2(ctx context.Context, proxyID string) error {
 	return nil
 }
 
-// ResumeProxyV2 unlocks a proxy (equivalent to Start/Resume).
-// PUT /api/v2/ipv4/{id}?access_code=<key>  body: {"action": "unlock"}
+// ResumeProxyV2 unlocks a proxy (admin: resume UX).
+// PUT /api/v2/ipv4/{ipv4}?access_code=<key>  body: {"action": "unlock"}
 func (c *Client) ResumeProxyV2(ctx context.Context, proxyID string) error {
 	body := map[string]string{"action": "unlock"}
 	if err := c.do(ctx, http.MethodPut, "/api/v2/ipv4/"+proxyID, body, nil); err != nil {
 		return fmt.Errorf("vpm.ResumeProxyV2: %w", err)
+	}
+	return nil
+}
+
+// StopProxyV2 stops a running proxy (traffic temporarily disabled).
+// POST /api/v2/ipv4/{ipv4}/stop?access_code=<key>
+func (c *Client) StopProxyV2(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/stop", nil, nil); err != nil {
+		return fmt.Errorf("vpm.StopProxyV2: %w", err)
+	}
+	return nil
+}
+
+// StartProxyV2 starts a stopped proxy.
+// POST /api/v2/ipv4/{ipv4}/start?access_code=<key>
+func (c *Client) StartProxyV2(ctx context.Context, proxyID string) error {
+	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4/"+proxyID+"/start", nil, nil); err != nil {
+		return fmt.Errorf("vpm.StartProxyV2: %w", err)
 	}
 	return nil
 }
