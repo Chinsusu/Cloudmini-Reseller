@@ -2,6 +2,7 @@ package vpm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -143,18 +144,20 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 
-// Cancel permanently deletes proxy(ies) from VPM.
-// DELETE /api/v2/ipv4/{id} — a single DELETE removes both HTTP and SOCKS5 inbounds
-// for default-protocol proxies. Only the first ID needs to be provided.
-// ProviderOrderID may be "id1|id2" (legacy) — only id1 is used.
-// Legacy v1 IDs (plain UUID) fall back to DeleteProxy v1.
+// Cancel permanently deletes a proxy from VPM.
+// DELETE /api/v2/ipv4/{id}?access_code=<key>
+// A single DELETE removes both HTTP and SOCKS5 inbounds for default-protocol proxies.
+// NOT_FOUND (404) is treated as success — proxy already gone or was never on v2.
 func (a *Adapter) Cancel(ctx context.Context, providerOrderID string) error {
 	id := firstID(providerOrderID)
 	if err := a.client.DeleteProxyV2(ctx, id); err != nil {
-		// Fallback to v1 for legacy orders
-		if ferr := a.client.DeleteProxy(ctx, id); ferr != nil {
-			return mapError(err)
+		var apiErr *APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+			// Proxy not found on v2 — already deleted or legacy v1 proxy.
+			// Treat as success (idempotent).
+			return nil
 		}
+		return mapError(err)
 	}
 	return nil
 }
