@@ -118,37 +118,67 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 		return nil, fmt.Errorf("%w: vpm returned empty proxy list", providers.ErrProviderUnavailable)
 	}
 
-	// Build credentials from response array.
-	// protocol=default → 2 entries (HTTP + SOCKS5) sharing the same IP.
-	// Other protocols → 1 entry.
+	// Build credentials from response.
+	// Per VPM API v2:
+	//   - protocol=default → single object with BOTH port_http and port_socks → create 2 credentials
+	//   - protocol=http    → port_http only
+	//   - protocol=socks5  → port_socks only
+	//   - vmess/vless/ss/trojan/wireguard → use connection_string
 	var creds []providers.ProxyCredential
 	for _, p := range proxies {
-		port := p.effectivePort()
-		if port == 0 && p.ConnectionString == "" {
-			continue
+		switch p.Protocol {
+		case "default":
+			// New VPM behavior: single object carries BOTH ports
+			if p.PortHTTP > 0 {
+				creds = append(creds, providers.ProxyCredential{
+					Host: p.IPv4, Port: p.PortHTTP,
+					Username: p.Username, Password: p.Password,
+					Protocol: "http",
+				})
+			}
+			if p.PortSOCKS > 0 {
+				creds = append(creds, providers.ProxyCredential{
+					Host: p.IPv4, Port: p.PortSOCKS,
+					Username: p.Username, Password: p.Password,
+					Protocol: "socks5",
+				})
+			}
+		case "http":
+			if p.PortHTTP > 0 {
+				creds = append(creds, providers.ProxyCredential{
+					Host: p.IPv4, Port: p.PortHTTP,
+					Username: p.Username, Password: p.Password,
+					Protocol: "http",
+				})
+			}
+		case "socks5":
+			if p.PortSOCKS > 0 {
+				creds = append(creds, providers.ProxyCredential{
+					Host: p.IPv4, Port: p.PortSOCKS,
+					Username: p.Username, Password: p.Password,
+					Protocol: "socks5",
+				})
+			}
+		default:
+			// vmess, vless, shadowsocks, trojan, wireguard — use connection_string
+			port := p.effectivePort()
+			creds = append(creds, providers.ProxyCredential{
+				Host: p.IPv4, Port: port,
+				Username: p.Username, Password: p.Password,
+				Protocol:         p.Protocol,
+				ConnectionString: p.ConnectionString,
+			})
 		}
-		creds = append(creds, providers.ProxyCredential{
-			Host:             p.IPv4,
-			Port:             port,
-			Username:         p.Username,
-			Password:         p.Password,
-			Protocol:         p.effectiveProtocol(),
-			ConnectionString: p.ConnectionString,
-		})
 	}
 	if len(creds) == 0 {
 		return nil, fmt.Errorf("%w: vpm returned no usable credentials", providers.ErrProviderUnavailable)
 	}
 
-	// Build ProviderOrderID from all proxy IDs.
-	// default → "id1|id2" (pair), others → plain UUID.
-	ids := make([]string, len(proxies))
-	for i, p := range proxies {
-		ids[i] = p.ID
-	}
+	// ProviderOrderID: first proxy ID (one DELETE removes all ports for default protocol)
+	providerOrderID := proxies[0].ID
 
 	return &providers.PurchaseResult{
-		ProviderOrderID: strings.Join(ids, "|"),
+		ProviderOrderID: providerOrderID,
 		Credentials:     creds,
 	}, nil
 }
