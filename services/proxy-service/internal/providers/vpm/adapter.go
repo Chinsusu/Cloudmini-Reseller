@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,7 @@ type Config struct {
 type Adapter struct {
 	client *Client
 	cfg    Config
+	logger *slog.Logger
 }
 
 // NewAdapter creates a new VPM adapter.
@@ -42,12 +44,13 @@ func NewAdapter(cfg Config) *Adapter {
 	return &Adapter{
 		client: NewClient(cfg.BaseURL, cfg.APIKey),
 		cfg:    cfg,
+		logger: slog.Default(),
 	}
 }
 
 // NewAdapterWithClient creates an adapter with an injected client (for testing).
 func NewAdapterWithClient(cfg Config, client *Client) *Adapter {
-	return &Adapter{client: client, cfg: cfg}
+	return &Adapter{client: client, cfg: cfg, logger: slog.Default()}
 }
 
 // ─── Purchase ─────────────────────────────────────────────────────────────────
@@ -92,6 +95,15 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 	// Default: POST /api/v2/ipv4 with specific IP from metadata.
 	// Region-based creation (POST /api/v2/proxies with group_id) is reserved for future use.
 	ipv4 := m["ipv4"]
+
+	a.logger.InfoContext(ctx, "vpm.Purchase",
+		slog.String("protocol", protocol),
+		slog.String("ipv4", ipv4),
+		slog.String("group_id", m["group_id"]),
+		slog.String("req_protocol", req.Protocol),
+		slog.String("meta_protocol", m["protocol"]),
+	)
+
 	var proxies []ProxySummaryV2
 	var err error
 	if ipv4 != "" {
