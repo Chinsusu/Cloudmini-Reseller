@@ -145,28 +145,66 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 
 // ─── API v2 Methods (current) ─────────────────────────────────────────────────
 
-// CreateProxyV2 allocates a proxy from a region pool.
-// POST /api/v2/proxies?access_code=<key> — used when group_id/region is specified.
-// Returns an array of ProxySummaryV2 objects.
-func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([]ProxySummaryV2, error) {
-	var out []ProxySummaryV2
-	if err := c.do(ctx, http.MethodPost, "/api/v2/proxies", req, &out); err != nil {
-		return nil, fmt.Errorf("vpm.CreateProxyV2: %w", err)
+// parseProxySummaries decodes the VPM data field which may be either:
+//   - a single object: {"id":"...", ...}
+//   - an array:        [{"id":"..."}, ...]
+//
+// This handles the server's ongoing migration between response formats.
+func parseProxySummaries(raw json.RawMessage) ([]ProxySummaryV2, error) {
+	if len(raw) == 0 {
+		return nil, nil
 	}
-	return out, nil
+	// Try array first
+	var arr []ProxySummaryV2
+	if raw[0] == '[' {
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			return nil, err
+		}
+		return arr, nil
+	}
+	// Single object — wrap in slice
+	var single ProxySummaryV2
+	if err := json.Unmarshal(raw, &single); err != nil {
+		return nil, err
+	}
+	if single.ID == "" {
+		return nil, nil
+	}
+	return []ProxySummaryV2{single}, nil
 }
 
-// CreateProxyByIPV4 allocates a proxy for a specific IP address (primary endpoint).
+// createAndParse posts body to path and returns proxies using parseProxySummaries.
+// Handles both array and single-object response format in the data field.
+func (c *Client) createAndParse(ctx context.Context, path string, body any) ([]ProxySummaryV2, error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, http.MethodPost, path, body, &raw); err != nil {
+		return nil, err
+	}
+	return parseProxySummaries(raw)
+}
+
+// CreateProxyV2 allocates a proxy from a region pool.
+// POST /api/v2/proxies?access_code=<key> — used when group_id/region is specified.
+// Handles both array and single-object response formats.
+func (c *Client) CreateProxyV2(ctx context.Context, req CreateProxyV2Request) ([]ProxySummaryV2, error) {
+	proxies, err := c.createAndParse(ctx, "/api/v2/proxies", req)
+	if err != nil {
+		return nil, fmt.Errorf("vpm.CreateProxyV2: %w", err)
+	}
+	return proxies, nil
+}
+
+// CreateProxyByIPV4 allocates a proxy for a specific IP address.
 // POST /api/v2/ipv4?access_code=<key>
-// body: {"ipv4": "<ip>", "protocol": "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"|"wireguard"}
-// Returns an array of ProxySummaryV2 objects.
+// body: {"ipv4": "<ip>", "protocol": "default"|"http"|"socks5"|"vmess"|...}
+// Handles both array and single-object response formats.
 func (c *Client) CreateProxyByIPV4(ctx context.Context, ipv4, protocol string) ([]ProxySummaryV2, error) {
 	body := map[string]string{"ipv4": ipv4, "protocol": protocol}
-	var out []ProxySummaryV2
-	if err := c.do(ctx, http.MethodPost, "/api/v2/ipv4", body, &out); err != nil {
+	proxies, err := c.createAndParse(ctx, "/api/v2/ipv4", body)
+	if err != nil {
 		return nil, fmt.Errorf("vpm.CreateProxyByIPV4: %w", err)
 	}
-	return out, nil
+	return proxies, nil
 }
 
 // GetProxyV2 returns details of a proxy by ID.
