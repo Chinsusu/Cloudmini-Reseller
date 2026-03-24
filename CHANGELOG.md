@@ -8,6 +8,51 @@ All notable changes to Cloudmini Reseller Platform are documented here.
 
 ---
 
+## [0.10.0] — 2026-03-24
+
+### Changed — VPM Provider Adapter: API v2 Migration
+
+**Breaking changes on VPM server side — adapter fully updated.**
+
+#### Response Format
+- `POST /api/v2/ipv4` now returns **single object** (`data: {}`) instead of array (`data: []`)
+- `POST /api/v2/proxies` still returns array
+- Added `parseProxySummaries(raw json.RawMessage)` helper that auto-detects format (`raw[0] == '['`) — handles both transparently via `createAndParse()`
+
+#### Protocol=default — Dual Port
+- `protocol=default` now returns **both `port_http` AND `port_socks`** in a single response object
+- `adapter.Purchase` updated: `switch p.Protocol` builds **2 credentials** (HTTP + SOCKS5) from a single `ProxySummaryV2` when `protocol=default`
+- `ProviderOrderID` simplified to plain `proxy.ID` (one DELETE removes all ports)
+
+#### New Protocol Support
+- Added `ProtocolConfig json.RawMessage` field to `ProxySummaryV2` for future VMess/VLESS/Shadowsocks/Trojan/WireGuard
+- Added `ConnectionString` field to `ProxyCredential` for VPN-style protocols
+- Added `StopProxyV2`, `StartProxyV2` client methods (`POST /api/v2/ipv4/{id}/stop|start`)
+
+#### Cancel / Delete
+- `Cancel` now exclusively uses `DELETE /api/v2/ipv4/{id}` (removed v1 fallback)
+- `DELETE` accepts both UUID and raw IPv4 address
+- `404 NOT_FOUND` treated as idempotent success
+
+#### Order Lifecycle
+- `CancelOrder` usecase: expired orders can now be cancelled (without refund)
+- `CancelOrder` calls `provider.Cancel()` (best-effort) before DB status update
+- Added `*slog.Logger` to `Adapter` struct for purchase debug logging
+
+### Added — Protocol Selector in Order UI
+
+- `OrderPanel` now shows 3 protocol buttons: **⚡ Default** (HTTP+SOCKS5) · **🌐 HTTP** · **🔌 SOCKS5**
+- Default selection: `"default"` (dual port)
+- Protocol sent in `metadata.protocol` → overrides `product.Protocol` in adapter
+- Updated `createOrder` meta type in `api.ts` to include `protocol?: string`
+
+### Fixed — Authentication
+
+- `authAPI.logout` now sends `refresh_token` from `pvp_refresh` cookie in request body
+- Skip server-side logout call if refresh token cookie is already missing
+
+---
+
 ## [0.9.0] — 2026-03-13
 
 ### Added — Admin Manual Top-Up
