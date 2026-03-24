@@ -169,6 +169,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
     const [country, setCountry] = useState('')
     const [ispId, setIspId] = useState('')
     const [periodMonths, setPeriodMonths] = useState(1)
+    const [protocol, setProtocol] = useState('default')
     const [placing, setPlacing] = useState(false)
 
     const meta = product.metadata ?? {}
@@ -211,6 +212,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                 country: country || undefined,
                 isp_id: ispId || undefined,
                 period_months: isStatic ? periodMonths : undefined,
+                protocol,
             })
             console.log('[OrderPanel] createOrder success:', res?.data)
             success('Order placed! Proxy is being activated...')
@@ -332,6 +334,37 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                             <button onClick={() => setQty(q => q + 1)}
                                 style={{ width: 34, height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'rgba(255,255,255,.04)', color: 'var(--text-heading)', cursor: 'pointer', fontWeight: 700 }}>+</button>
                         </div>
+                    </div>
+                </div>
+
+                {/* Protocol selector */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                    <label style={{ display: 'block', fontSize: '.82rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '.5rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>Protocol</label>
+                    <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                        {([
+                            { value: 'default', label: '⚡ Default', desc: 'HTTP + SOCKS5' },
+                            { value: 'http',    label: '🌐 HTTP',    desc: 'HTTP only' },
+                            { value: 'socks5',  label: '🔌 SOCKS5',  desc: 'SOCKS5 only' },
+                        ] as const).map(opt => (
+                            <button key={opt.value} onClick={() => setProtocol(opt.value)} style={{
+                                padding: '.45rem .9rem',
+                                border: `1px solid ${protocol === opt.value ? 'var(--dc-gold)' : 'var(--border)'}`,
+                                borderRadius: 'var(--radius)',
+                                background: protocol === opt.value ? 'rgba(230,168,23,.12)' : 'rgba(255,255,255,.03)',
+                                color: protocol === opt.value ? 'var(--dc-gold)' : 'var(--text-muted)',
+                                cursor: 'pointer',
+                                fontSize: '.82rem',
+                                fontWeight: protocol === opt.value ? 700 : 500,
+                                transition: 'all .12s',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: '.1rem',
+                            }}>
+                                <span>{opt.label}</span>
+                                <span style={{ fontSize: '.72rem', opacity: .7 }}>{opt.desc}</span>
+                            </button>
+                        ))}
                     </div>
                 </div>
 

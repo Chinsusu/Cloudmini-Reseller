@@ -104,7 +104,7 @@ export const proxyAPI = {
     listProducts: (proxyType = '', protocol = '', location = '') =>
         api.get(`/v1/proxy/products?proxy_type=${proxyType}&protocol=${protocol}&location=${location}`),
     listOrders: (page = 1, limit = 20) => api.get(`/v1/proxy/orders?page=${page}&limit=${limit}`),
-    createOrder: async (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number }) => {
+    createOrder: async (productId: string, qty: number, meta?: { country?: string; isp_id?: string; period_months?: number; protocol?: string }) => {
         // Create qty individual orders SEQUENTIALLY to avoid billing wallet row-lock race condition
         const count = Math.max(1, qty)
         let lastResult: any
