@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -45,7 +46,7 @@ func Load() (*Config, error) {
 		NatsURL:            getEnv("NATS_URL", "nats://localhost:4222"),
 		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6379"),
 		LogLevel:           getEnv("LOG_LEVEL", "info"),
-		MaxSessionsPerUser: 5,
+		MaxSessionsPerUser: getEnvInt("MAX_SESSIONS_PER_USER", 20),
 		MaxLoginAttempts:   10,
 		LockoutDuration:    15 * time.Minute,
 	}
@@ -76,6 +77,15 @@ func Load() (*Config, error) {
 func getEnv(key, defaultVal string) string {
 	if val := os.Getenv(key); val != "" {
 		return val
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if n, err := strconv.Atoi(val); err == nil {
+			return n
+		}
 	}
 	return defaultVal
 }

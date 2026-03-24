@@ -897,7 +897,8 @@ export default function ProxyOrdersPage() {
     const { data: ordersData, isLoading: ordersLoading, refetch } = useQuery({
         queryKey: ['proxy-orders', page, limit],
         queryFn: () => proxyAPI.listOrders(page, limit === 9999 ? 9999 : limit),
-        refetchInterval: 15000,
+        refetchInterval: 30000,            // 30s thay vì 15s
+        refetchIntervalInBackground: false, // dừng khi tab không active
     })
     const orders: any[] = ordersData?.data?.data ?? []
     const meta = ordersData?.data?.meta ?? {}
