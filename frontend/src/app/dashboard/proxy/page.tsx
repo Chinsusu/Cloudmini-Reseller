@@ -796,7 +796,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
                                                         {lockingId === o.id ? '...' : '🔓 Unlock'}
                                                     </button>
                                                 )}
-                                                {(o.status === 'active' || o.status === 'pending') && (
+                                                {(o.status === 'active' || o.status === 'pending' || o.status === 'expired') && (
                                                     <button className="action-btn red" onClick={() => onCancel(o.id, o.order_number)}>
                                                         <XCircle size={12} /> Cancel
                                                     </button>

@@ -289,16 +289,34 @@ func (u *OrderUsecase) CancelOrder(ctx context.Context, orderID, userID uuid.UUI
 	if order.UserID != userID {
 		return fmt.Errorf("CancelOrder: forbidden")
 	}
-	if order.Status != domain.OrderActive && order.Status != domain.OrderPending {
+	// Allow cancel for active, pending, and expired orders.
+	// Suspended orders must be unlocked first; cancelled/failed/refunded are terminal.
+	if order.Status != domain.OrderActive && order.Status != domain.OrderPending && order.Status != domain.OrderExpired {
 		return domain.ErrOrderNotCancellable
+	}
+
+	// Delete proxy at provider (best-effort — don't block cancel if provider fails)
+	if order.ProviderOrderID != "" {
+		provider := u.providerReg.Get(order.ProviderID.String())
+		if provider != nil {
+			if err := provider.Cancel(ctx, order.ProviderOrderID); err != nil {
+				u.logger.WarnContext(ctx, "CancelOrder: provider cancel failed (continuing)",
+					slog.String("order_id", order.ID.String()),
+					slog.String("error", err.Error()),
+				)
+			}
+		}
 	}
 
 	if err := u.orderRepo.UpdateStatus(ctx, order.ID, domain.OrderCancelled); err != nil {
 		return fmt.Errorf("CancelOrder: update status: %w", err)
 	}
 
-	// Release billing hold to refund balance and create a visible transaction log
-	_ = u.billingClient.ReleaseHold(ctx, order.UserID, order.TotalAmount, "proxy_order", order.ID, fmt.Sprintf("Hoàn tiền Proxy %s", order.OrderNumber))
+	// Refund only if order is still active (billing hold not yet confirmed for expired orders)
+	if order.Status == domain.OrderActive || order.Status == domain.OrderPending {
+		_ = u.billingClient.ReleaseHold(ctx, order.UserID, order.TotalAmount, "proxy_order", order.ID, fmt.Sprintf("Hoàn tiền Proxy %s", order.OrderNumber))
+	}
+
 	// Log order.cancelled event
 	_ = u.orderEvtRepo.Log(ctx, order.ID, domain.EventOrderCancelled, map[string]any{
 		"reason": reason,
