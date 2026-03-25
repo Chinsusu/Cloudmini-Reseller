@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
     LayoutDashboard, Globe, Server, Wallet, User,
     Users, Key, Webhook, LogOut, ShieldCheck, BarChart3,
-    Cloud, ChevronRight, ClipboardList
+    Cloud, ChevronRight, ClipboardList, ShoppingCart
 } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
 import { authAPI } from '@/lib/api'
@@ -21,7 +21,8 @@ const userNav = [
     {
         group: 'SERVICES',
         items: [
-            { href: '/dashboard/proxy', label: 'Proxy Orders', icon: Globe },
+            { href: '/dashboard/proxy', label: 'My Proxies', icon: Globe },
+            { href: '/dashboard/proxy/order', label: 'Order Proxy', icon: ShoppingCart },
             { href: '/dashboard/vps', label: 'VPS Instances', icon: Server },
         ]
     },
@@ -55,7 +56,8 @@ const adminNav = [
     {
         group: 'SERVICES',
         items: [
-            { href: '/dashboard/proxy', label: 'Proxy Orders', icon: Globe },
+            { href: '/dashboard/proxy', label: 'My Proxies', icon: Globe },
+            { href: '/dashboard/proxy/order', label: 'Order Proxy', icon: ShoppingCart },
             { href: '/dashboard/vps', label: 'VPS Instances', icon: Server },
         ]
     },
@@ -131,7 +133,7 @@ export function Sidebar({ mobileOpen = false, onClose }: { mobileOpen?: boolean;
                             // Root dashboard links (e.g. /admin, /dashboard, /reseller) should only
                             // be active on exact match — sub-routes like /admin/users must NOT
                             // highlight the parent dashboard item.
-                            const isRootOnly = ['/admin', '/dashboard', '/reseller', '/admin/proxy'].includes(href)
+                            const isRootOnly = ['/admin', '/dashboard', '/reseller', '/admin/proxy', '/dashboard/proxy'].includes(href)
                             const active = pathname === href ||
                                 (!isRootOnly && href !== '/' && pathname?.startsWith(href + '/'))
                             return (

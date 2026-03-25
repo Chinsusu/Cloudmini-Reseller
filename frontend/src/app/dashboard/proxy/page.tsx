@@ -878,27 +878,17 @@ function TabBtn({ label, active, onClick, count }: { label: string; active: bool
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProxyOrdersPage() {
-    const [tab, setTab] = useState<'buy' | 'orders'>('orders')
     const [page, setPage] = useState(1)
     const [limit, setLimit] = useState(10)
-    const [selected, setSelected] = useState<any>(null)
-    const [filterType, setFilterType] = useState('')
     const { success, error: toastError } = useToast()
     const { confirm, dialog: confirmDialog } = useConfirm()
     const qc = useQueryClient()
 
-    const { data: prodData, isLoading: prodLoading } = useQuery({
-        queryKey: ['proxy-products', filterType],
-        queryFn: () => proxyAPI.listProducts(filterType, '', ''),
-        staleTime: 60_000,
-    })
-    const products: any[] = prodData?.data?.data ?? []
-
     const { data: ordersData, isLoading: ordersLoading, refetch } = useQuery({
         queryKey: ['proxy-orders', page, limit],
         queryFn: () => proxyAPI.listOrders(page, limit === 9999 ? 9999 : limit),
-        refetchInterval: 30000,            // 30s thay vì 15s
-        refetchIntervalInBackground: false, // dừng khi tab không active
+        refetchInterval: 30000,
+        refetchIntervalInBackground: false,
     })
     const orders: any[] = ordersData?.data?.data ?? []
     const meta = ordersData?.data?.meta ?? {}
@@ -949,13 +939,6 @@ export default function ProxyOrdersPage() {
         }
     }
 
-    const typeFilters = [
-        { value: '', label: 'Tất cả' },
-        { value: 'residential', label: 'Residential' },
-        { value: 'datacenter', label: 'Datacenter' },
-        { value: 'mobile', label: 'Mobile' },
-    ]
-
     return (
         <AppLayout breadcrumb={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Proxy' }]}>
             {confirmDialog}
@@ -963,108 +946,46 @@ export default function ProxyOrdersPage() {
             {/* Header */}
             <div className="page-header">
                 <div>
-                    <h1 className="page-title">Proxy Services</h1>
-                    <p className="page-subtitle">Mua và quản lý proxy của bạn</p>
+                    <h1 className="page-title">My Proxies</h1>
+                    <p className="page-subtitle">Quản lý proxy của bạn</p>
                 </div>
-                <button className="topbar-icon-btn" onClick={() => refetch()} title="Refresh">
-                    <RefreshCw size={15} />
-                </button>
+                <div style={{ display: 'flex', gap: '.5rem' }}>
+                    <a href="/dashboard/proxy/order" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}>
+                        <ShoppingCart size={14} /> Order Proxy
+                    </a>
+                    <button className="topbar-icon-btn" onClick={() => refetch()} title="Refresh">
+                        <RefreshCw size={15} />
+                    </button>
+                </div>
             </div>
 
-            {/* ─── Tab Navigation ─── */}
-            <div style={{
-                display: 'flex', borderBottom: '1px solid var(--border)',
-                marginBottom: '1.5rem', gap: '.25rem',
-            }}>
-                <TabBtn label="📦 Proxy của tôi" active={tab === 'orders'} onClick={() => setTab('orders')} count={orders.length || undefined} />
-                <TabBtn label="🛒 Mua Proxy" active={tab === 'buy'} onClick={() => setTab('buy')} />
-            </div>
-
-            {/* ─── Tab: Mua Proxy ─── */}
-            {tab === 'buy' && (
-                <div className="fade-in">
-                    {/* Filter chips */}
-                    <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                        {typeFilters.map(f => (
-                            <button key={f.value} onClick={() => { setFilterType(f.value); setSelected(null) }}
-                                style={{
-                                    padding: '.38rem 1rem',
-                                    borderRadius: 'var(--radius-pill)',
-                                    fontSize: '.82rem', fontWeight: 600,
-                                    border: filterType === f.value ? '1px solid rgba(230,168,23,.4)' : '1px solid var(--border)',
-                                    background: filterType === f.value ? 'rgba(230,168,23,.12)' : 'var(--surface)',
-                                    color: filterType === f.value ? 'var(--dc-gold)' : 'var(--text)',
-                                    cursor: 'pointer', transition: 'all .15s',
-                                }}>
-                                {f.label}
-                            </button>
-                        ))}
+            {/* Orders list */}
+            <div className="fade-in">
+                {ordersLoading ? (
+                    <div className="loading-spinner">Đang tải đơn hàng...</div>
+                ) : orders.length === 0 ? (
+                    <div className="card">
+                        <div className="empty-state">
+                            <Package size={44} opacity={0.25} />
+                            <p>Bạn chưa có đơn proxy nào</p>
+                            <a href="/dashboard/proxy/order" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '.35rem' }}>
+                                <ShoppingCart size={14} /> Order Proxy ngay
+                            </a>
+                        </div>
                     </div>
-
-                    {/* Products grid */}
-                    {prodLoading ? (
-                        <div className="loading-spinner">Đang tải sản phẩm...</div>
-                    ) : products.length === 0 ? (
-                        <div className="card">
-                            <div className="empty-state">
-                                <Globe size={40} opacity={0.25} />
-                                <p>Chưa có sản phẩm proxy nào</p>
-                                <span style={{ fontSize: '.82rem', color: 'var(--text-muted)' }}>Liên hệ admin để thêm sản phẩm</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem', padding: '2px' }}>
-                            {products.map((p: any) => (
-                                <ProductCard
-                                    key={p.id}
-                                    product={p}
-                                    selected={selected?.id === p.id}
-                                    onClick={() => setSelected(selected?.id === p.id ? null : p)}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Order panel (slide-in below selected card) */}
-                    {selected && (
-                        <OrderPanel
-                            product={selected}
-                            onClose={() => setSelected(null)}
-                            onSuccess={() => { setSelected(null); setTab('orders') }}
+                ) : (
+                    <>
+                        <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onLock={handleLockOrder} onUnlock={handleUnlockOrder} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
+                        <Pagination
+                            page={page}
+                            totalPages={meta.total_pages ?? 1}
+                            total={meta.total ?? orders.length}
+                            limit={limit === 9999 ? (meta.total ?? orders.length) : limit}
+                            onPageChange={p => setPage(p)}
                         />
-                    )}
-                </div>
-            )}
-
-            {/* ─── Tab: Proxy của tôi ─── */}
-            {tab === 'orders' && (
-                <div className="fade-in">
-                    {ordersLoading ? (
-                        <div className="loading-spinner">Đang tải đơn hàng...</div>
-                    ) : orders.length === 0 ? (
-                        <div className="card">
-                            <div className="empty-state">
-                                <Package size={44} opacity={0.25} />
-                                <p>Bạn chưa có đơn proxy nào</p>
-                                <button className="btn-primary" onClick={() => setTab('buy')}>
-                                    <ShoppingCart size={14} /> Mua Proxy ngay
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onLock={handleLockOrder} onUnlock={handleUnlockOrder} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
-                            <Pagination
-                                page={page}
-                                totalPages={meta.total_pages ?? 1}
-                                total={meta.total ?? orders.length}
-                                limit={limit === 9999 ? (meta.total ?? orders.length) : limit}
-                                onPageChange={p => setPage(p)}
-                            />
-                        </>
-                    )}
-                </div>
-            )}
+                    </>
+                )}
+            </div>
         </AppLayout>
     )
 }
