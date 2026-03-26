@@ -60,9 +60,10 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	userID := mustParseUUID(middleware.GetUserID(r.Context()))
 
 	var req struct {
-		ProductID      string `json:"product_id"`
-		Quantity       int    `json:"quantity"`
-		IdempotencyKey string `json:"idempotency_key"`
+		ProductID      string            `json:"product_id"`
+		Quantity       int               `json:"quantity"`
+		IdempotencyKey string            `json:"idempotency_key"`
+		Metadata       map[string]string `json:"metadata"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
@@ -79,6 +80,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		ProductID:      productID,
 		Quantity:       req.Quantity,
 		IdempotencyKey: req.IdempotencyKey,
+		Metadata:       req.Metadata,
 	})
 	if err != nil {
 		h.handleError(w, r, err)
