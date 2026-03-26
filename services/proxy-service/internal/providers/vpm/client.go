@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,7 @@ type Client struct {
 // NewClient creates a VPM API client.
 func NewClient(baseURL, apiKey string) *Client {
 	return &Client{
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: defaultTimeout,
@@ -40,7 +41,7 @@ func NewClient(baseURL, apiKey string) *Client {
 
 // NewClientWithHTTP creates a client with a custom http.Client (for testing).
 func NewClientWithHTTP(baseURL, apiKey string, httpClient *http.Client) *Client {
-	return &Client{baseURL: baseURL, apiKey: apiKey, httpClient: httpClient}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, httpClient: httpClient}
 }
 
 // do executes an authenticated HTTP request to VPM.
