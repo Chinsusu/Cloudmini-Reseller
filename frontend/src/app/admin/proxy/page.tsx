@@ -132,7 +132,7 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
             const payload: Record<string, any> = {
                 name: form.name, proxy_type: form.proxy_type,
                 protocol: protocols.join(','),
-                location: form.location || selectedGroups.map(gid => groups.find((g: any) => g.id === gid)?.name).filter(Boolean).join(', '),
+                location: form.location,
                 base_cost: form.base_cost, provider_id: form.provider_id,
             }
             if (form.duration_days !== '') payload.duration_days = parseInt(form.duration_days, 10)
@@ -178,6 +178,7 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                             </div>
                         </div>
 
+                        <div className="form-group"><label>Location</label><input className="input" placeholder="CZ-HCM-FPT, US, EU..." value={form.location} onChange={set('location')} /></div>
                         <div className="form-group"><label>Base Cost ($)</label><input className="input" type="number" step="0.01" min="0" placeholder="5.00" value={form.base_cost} onChange={set('base_cost')} /></div>
                         <div className="form-group"><label>Duration (days, optional)</label><input className="input" type="number" min="1" placeholder="30" value={form.duration_days} onChange={set('duration_days')} /></div>
                         <div className="form-group"><label>Bandwidth GB (optional)</label><input className="input" type="number" step="0.1" min="0" placeholder="10" value={form.bandwidth_gb} onChange={set('bandwidth_gb')} /></div>
@@ -194,10 +195,10 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                             }
                         </div>
 
-                        {/* Groups / Location — VPM providers */}
+                        {/* Groups — VPM providers */}
                         {selectedProvider?.adapter_type === 'vpm' && (
                             <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                                <label>Location (Groups)</label>
+                                <label>Groups</label>
                                 {groupsLoading ? (
                                     <div style={{ padding: '.5rem', color: 'var(--text-muted)', fontSize: '.85rem' }}>Loading groups...</div>
                                 ) : groups.length === 0 ? (
@@ -225,14 +226,6 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                                         ))}
                                     </div>
                                 )}
-                            </div>
-                        )}
-
-                        {/* Non-VPM: Location text field */}
-                        {selectedProvider && selectedProvider.adapter_type !== 'vpm' && (
-                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                                <label>Location label (optional)</label>
-                                <input className="input" placeholder="Global, US, EU..." value={form.location} onChange={set('location')} />
                             </div>
                         )}
 
@@ -304,7 +297,7 @@ function EditProductModal({ product, providers, onClose }: { product: any, provi
             const payload: Record<string, any> = {
                 name: form.name, proxy_type: form.proxy_type,
                 protocol: protocols.join(','),
-                location: form.location || selectedGroups.map(gid => groups.find((g: any) => g.id === gid)?.name).filter(Boolean).join(', '),
+                location: form.location,
                 base_cost: form.base_cost,
             }
             if (form.duration_days !== '') payload.duration_days = parseInt(form.duration_days, 10)
@@ -349,6 +342,7 @@ function EditProductModal({ product, providers, onClose }: { product: any, provi
                             </div>
                         </div>
 
+                        <div className="form-group"><label>Location</label><input className="input" placeholder="CZ-HCM-FPT, US, EU..." value={form.location} onChange={set('location')} /></div>
                         <div className="form-group"><label>Base Cost ($)</label><input className="input" type="number" step="0.01" min="0" value={form.base_cost} onChange={set('base_cost')} /></div>
                         <div className="form-group"><label>Duration (days)</label><input className="input" type="number" min="1" placeholder="—" value={form.duration_days} onChange={set('duration_days')} /></div>
                         <div className="form-group"><label>Bandwidth GB</label><input className="input" type="number" step="0.1" min="0" placeholder="—" value={form.bandwidth_gb} onChange={set('bandwidth_gb')} /></div>
@@ -361,10 +355,10 @@ function EditProductModal({ product, providers, onClose }: { product: any, provi
                             </div>
                         </div>
 
-                        {/* Groups / Location — VPM providers only */}
+                        {/* Groups — VPM providers only */}
                         {selectedProvider?.adapter_type === 'vpm' && (
                             <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                                <label>Location (Groups)</label>
+                                <label>Groups</label>
                                 {groupsLoading ? (
                                     <div style={{ padding: '.5rem', color: 'var(--text-muted)', fontSize: '.85rem' }}>Loading groups...</div>
                                 ) : groups.length === 0 ? (
@@ -392,14 +386,6 @@ function EditProductModal({ product, providers, onClose }: { product: any, provi
                                         ))}
                                     </div>
                                 )}
-                            </div>
-                        )}
-
-                        {/* Non-VPM: Location text field */}
-                        {selectedProvider && selectedProvider.adapter_type !== 'vpm' && (
-                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
-                                <label>Location label</label>
-                                <input className="input" placeholder="Global, US, EU..." value={form.location} onChange={set('location')} />
                             </div>
                         )}
 
