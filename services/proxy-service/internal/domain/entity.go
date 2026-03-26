@@ -58,7 +58,7 @@ type Order struct {
 	OrderNumber      string           `db:"order_number"     json:"order_number"`
 	UserID           uuid.UUID        `db:"user_id"          json:"user_id"`
 	ResellerID       *uuid.UUID       `db:"reseller_id"      json:"reseller_id,omitempty"`
-	ProductID        *uuid.UUID       `db:"product_id"       json:"product_id"`
+	ProductID        uuid.UUID        `db:"product_id"       json:"product_id"`
 	ProviderID       uuid.UUID        `db:"provider_id"      json:"provider_id"`
 	Status           string           `db:"status"           json:"status"`
 	Quantity         int              `db:"quantity"         json:"quantity"`
@@ -102,7 +102,6 @@ type IProductRepository interface {
 	Update(ctx context.Context, p *Product) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ToggleActive(ctx context.Context, id uuid.UUID) error
-	DetachTerminatedOrders(ctx context.Context, productID uuid.UUID) (int64, error)
 }
 
 // ─── Order Event ──────────────────────────────────────────────────────────────

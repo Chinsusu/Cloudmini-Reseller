@@ -5,9 +5,8 @@ import { adminAPI } from '@/lib/api'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Pagination } from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { formatVND } from '@/lib/format'
-import { Globe, Plus, X, ToggleLeft, ToggleRight, Info, Pencil, Trash2 } from 'lucide-react'
+import { Globe, Plus, X, ToggleLeft, ToggleRight, Info, Pencil } from 'lucide-react'
 
 // Proxy-Cheap service catalog — plans differ per service type
 type PCService = { id: string, label: string, plans: { id: string, label: string }[], hasPackages?: boolean, isRotating?: boolean }
@@ -266,13 +265,18 @@ export default function AdminProxyPage() {
     const [page, setPage] = useState(1)
     const [showAdd, setShowAdd] = useState(false)
     const [editProduct, setEditProduct] = useState<any>(null)
+    const [filter, setFilter] = useState<'available' | 'hidden'>('available')
     const qc = useQueryClient()
     const { success, error: toastError } = useToast()
-    const { confirm } = useConfirm()
 
     const { data, isLoading } = useQuery({ queryKey: ['admin-proxy-products', page], queryFn: () => adminAPI.listProxyProducts(page) })
-    const products = data?.data?.data ?? []
+    const allProducts = data?.data?.data ?? []
     const meta = data?.data?.meta ?? {}
+
+    // Client-side filter by is_active
+    const products = allProducts.filter((p: any) => filter === 'available' ? p.is_active : !p.is_active)
+    const availableCount = allProducts.filter((p: any) => p.is_active).length
+    const hiddenCount = allProducts.filter((p: any) => !p.is_active).length
 
     const { data: providersData } = useQuery({ queryKey: ['admin-proxy-providers'], queryFn: () => adminAPI.listProxyProviders(), staleTime: 60_000 })
     const providers: any[] = providersData?.data?.data ?? providersData?.data ?? []
@@ -283,15 +287,6 @@ export default function AdminProxyPage() {
         onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-proxy-products'] }); success('Status updated') },
         onError: () => toastError('Failed to update'),
     })
-    const deleteMut = useMutation({
-        mutationFn: (id: string) => adminAPI.deleteProxyProduct(id),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-proxy-products'] }); success('Product deleted') },
-        onError: () => toastError('Failed to delete'),
-    })
-    const handleDelete = async (p: any) => {
-        const ok = await confirm({ title: 'Delete Product', message: `Delete "${p.name}"? This cannot be undone.`, variant: 'danger' })
-        if (ok) deleteMut.mutate(p.id)
-    }
 
     return (
         <AppLayout breadcrumb={[{ label: 'Admin', href: '/admin' }, { label: 'Proxy Products' }]}>
@@ -306,13 +301,39 @@ export default function AdminProxyPage() {
                 <button className="btn-primary" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Product</button>
             </div>
 
+            {/* Filter tabs */}
+            <div style={{ display: 'flex', gap: '.4rem', marginBottom: '1rem' }}>
+                <button
+                    onClick={() => setFilter('available')}
+                    style={{
+                        padding: '.45rem .9rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+                        fontWeight: 600, fontSize: '.82rem', cursor: 'pointer',
+                        background: filter === 'available' ? 'var(--primary)' : 'var(--surface)',
+                        color: filter === 'available' ? '#fff' : 'var(--text)',
+                    }}>
+                    Available ({availableCount})
+                </button>
+                <button
+                    onClick={() => setFilter('hidden')}
+                    style={{
+                        padding: '.45rem .9rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)',
+                        fontWeight: 600, fontSize: '.82rem', cursor: 'pointer',
+                        background: filter === 'hidden' ? 'var(--text-muted)' : 'var(--surface)',
+                        color: filter === 'hidden' ? '#fff' : 'var(--text)',
+                    }}>
+                    Hidden ({hiddenCount})
+                </button>
+            </div>
+
             <div className="card" style={{ padding: 0 }}>
                 {isLoading ? <div className="loading-spinner">Loading...</div>
                     : products.length === 0 ? (
                         <div className="empty-state">
                             <Globe size={40} opacity={0.3} />
-                            <p>No proxy products yet</p>
-                            <button className="btn-primary" onClick={() => setShowAdd(true)}><Plus size={14} /> Add first product</button>
+                            <p>{filter === 'available' ? 'No active products' : 'No hidden products'}</p>
+                            {filter === 'available' && (
+                                <button className="btn-primary" onClick={() => setShowAdd(true)}><Plus size={14} /> Add first product</button>
+                            )}
                         </div>
                     ) : (
                         <>
@@ -328,7 +349,6 @@ export default function AdminProxyPage() {
                                             <th>Duration</th>
                                             <th>Bandwidth</th>
                                             <th>Cost</th>
-                                            <th>Status</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -336,7 +356,7 @@ export default function AdminProxyPage() {
                                         {products.map((p: any) => {
                                             const provider = providerMap[p.provider_id]
                                             return (
-                                                <tr key={p.id} style={{ opacity: p.is_active ? 1 : 0.5 }}>
+                                                <tr key={p.id} style={{ opacity: p.is_active ? 1 : 0.55 }}>
                                                     <td><strong>{p.name}</strong></td>
                                                     <td>
                                                         {provider ? (
@@ -353,17 +373,14 @@ export default function AdminProxyPage() {
                                                     <td style={{ color: 'var(--text-muted)', fontSize: '.85rem' }}>{p.bandwidth_gb ? `${p.bandwidth_gb} GB` : '—'}</td>
                                                     <td><strong>{formatVND(p.base_cost)}</strong></td>
                                                     <td>
-                                                        <button className="action-btn" onClick={() => toggleMut.mutate(p.id)} disabled={toggleMut.isPending}
-                                                            style={{ color: p.is_active ? 'var(--success)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '.3rem' }}
-                                                            title={p.is_active ? 'Click to disable' : 'Click to enable'}>
-                                                            {p.is_active ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                                                            {p.is_active ? 'Active' : 'Disabled'}
-                                                        </button>
-                                                    </td>
-                                                    <td>
                                                         <div style={{ display: 'flex', gap: '.3rem' }}>
                                                             <button className="action-btn" onClick={() => setEditProduct(p)} title="Edit" style={{ color: 'var(--primary)' }}><Pencil size={15} /></button>
-                                                            <button className="action-btn" onClick={() => handleDelete(p)} title="Delete" style={{ color: 'var(--error)' }} disabled={deleteMut.isPending}><Trash2 size={15} /></button>
+                                                            <button className="action-btn" onClick={() => toggleMut.mutate(p.id)}
+                                                                disabled={toggleMut.isPending}
+                                                                title={p.is_active ? 'Hide product' : 'Show product'}
+                                                                style={{ color: p.is_active ? 'var(--text-muted)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: '.25rem', fontSize: '.8rem' }}>
+                                                                {p.is_active ? <><ToggleLeft size={16} /> Hide</> : <><ToggleRight size={16} /> Show</>}
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -379,3 +396,4 @@ export default function AdminProxyPage() {
         </AppLayout>
     )
 }
+

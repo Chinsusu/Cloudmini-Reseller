@@ -237,22 +237,6 @@ func (r *ProductRepository) Update(ctx context.Context, p *domain.Product) error
 	return nil
 }
 
-// DetachTerminatedOrders sets product_id to NULL on orders that are
-// cancelled, expired, or failed — so the product can be safely deleted.
-func (r *ProductRepository) DetachTerminatedOrders(ctx context.Context, productID uuid.UUID) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE proxy.orders SET product_id = NULL
-		 WHERE product_id = $1
-		   AND status IN ('cancelled', 'expired', 'failed')`,
-		productID,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("ProductRepository.DetachTerminatedOrders: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	return n, nil
-}
-
 func (r *ProductRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM proxy.products WHERE id=$1`, id)
 	if err != nil {

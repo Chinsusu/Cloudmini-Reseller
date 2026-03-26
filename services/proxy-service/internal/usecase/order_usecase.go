@@ -119,7 +119,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		OrderNumber:    fmt.Sprintf("PX-%s-%04X", time.Now().Format("060102"), uint16(time.Now().UnixNano()&0xFFFF)),
 		UserID:         req.UserID,
 		ResellerID:     req.ResellerID,
-		ProductID:      &req.ProductID,
+		ProductID:      req.ProductID,
 		ProviderID:     product.ProviderID,
 		Status:         domain.OrderPending,
 		Quantity:       req.Quantity,
@@ -359,7 +359,7 @@ func (u *OrderUsecase) RenewOrder(ctx context.Context, orderID, userID uuid.UUID
 	}
 
 	// Load product to get duration and price
-	product, err := u.productRepo.GetByID(ctx, *order.ProductID)
+	product, err := u.productRepo.GetByID(ctx, order.ProductID)
 	if err != nil {
 		return nil, fmt.Errorf("RenewOrder: load product: %w", err)
 	}
