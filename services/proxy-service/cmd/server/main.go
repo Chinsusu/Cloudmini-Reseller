@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -95,19 +96,44 @@ func main() {
 		log.Warn("PROXY_CHEAP_API_KEY/SECRET not set — proxy-cheap adapter disabled")
 	}
 
-	// VPM adapter — sync provider using internal VPS Proxy Manager
-	// Registry key MUST match the provider UUID in proxy.providers table
-	// because order_usecase looks up by product.ProviderID.String()
-	if vpmBaseURL != "" && vpmAPIKey != "" {
+	// VPM adapters — load all active VPM providers from DB.
+	// Each provider row with adapter_type='vpm' gets its own adapter instance.
+	vpmProviders, err := providerRepo.ListByAdapterType(context.Background(), "vpm")
+	if err != nil {
+		log.Error("failed to load VPM providers from DB", slog.String("error", err.Error()))
+	}
+	if len(vpmProviders) > 0 {
+		for _, p := range vpmProviders {
+			var cfg vpm.Config
+			if jsonErr := json.Unmarshal(p.Config, &cfg); jsonErr != nil {
+				log.Error("invalid VPM provider config", slog.String("provider_id", p.ID.String()), slog.String("error", jsonErr.Error()))
+				continue
+			}
+			if cfg.BaseURL == "" {
+				log.Warn("VPM provider has empty base_url, skipping", slog.String("provider_id", p.ID.String()))
+				continue
+			}
+			adapter := vpm.NewAdapter(cfg)
+			registry.Register(p.ID.String(), adapter)
+			log.Info("vpm adapter registered",
+				slog.String("provider_id", p.ID.String()),
+				slog.String("name", p.Name),
+				slog.String("display_name", p.DisplayName),
+				slog.String("base_url", cfg.BaseURL),
+			)
+		}
+	} else if vpmBaseURL != "" && vpmAPIKey != "" {
+		// Fallback: register from env vars (legacy single-instance mode)
 		vpmAdapter := vpm.NewAdapter(vpm.Config{
 			BaseURL: vpmBaseURL,
 			APIKey:  vpmAPIKey,
 		})
 		registry.Register("b2000000-0000-0000-0000-000000000002", vpmAdapter)
-		log.Info("vpm adapter registered", slog.String("base_url", vpmBaseURL))
+		log.Info("vpm adapter registered (env fallback)", slog.String("base_url", vpmBaseURL))
 	} else {
-		log.Warn("VPM_BASE_URL/API_KEY not set — vpm adapter disabled")
+		log.Warn("no VPM providers configured")
 	}
+
 
 	// ── Usecases ─────────────────────────────────────────────────────────────
 	orderUC := usecase.NewOrderUsecase(

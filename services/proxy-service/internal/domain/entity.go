@@ -85,6 +85,12 @@ type Order struct {
 type IProviderRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Provider, error)
 	ListActive(ctx context.Context) ([]*Provider, error)
+	ListAll(ctx context.Context) ([]*Provider, error)
+	ListByAdapterType(ctx context.Context, adapterType string) ([]*Provider, error)
+	Create(ctx context.Context, p *Provider) error
+	Update(ctx context.Context, p *Provider) error
+	ToggleActive(ctx context.Context, id uuid.UUID, active bool) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // IProductRepository manages proxy products.

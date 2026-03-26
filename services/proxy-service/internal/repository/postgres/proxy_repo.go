@@ -281,6 +281,74 @@ func (r *ProviderRepository) ListActive(ctx context.Context) ([]*domain.Provider
 	return providers, nil
 }
 
+func (r *ProviderRepository) ListAll(ctx context.Context) ([]*domain.Provider, error) {
+	var providers []*domain.Provider
+	if err := r.db.SelectContext(ctx, &providers,
+		`SELECT * FROM proxy.providers ORDER BY priority DESC, name`,
+	); err != nil {
+		return nil, fmt.Errorf("ProviderRepository.ListAll: %w", err)
+	}
+	return providers, nil
+}
+
+func (r *ProviderRepository) ListByAdapterType(ctx context.Context, adapterType string) ([]*domain.Provider, error) {
+	var providers []*domain.Provider
+	if err := r.db.SelectContext(ctx, &providers,
+		`SELECT * FROM proxy.providers WHERE adapter_type=$1 AND is_active=true ORDER BY priority DESC`,
+		adapterType,
+	); err != nil {
+		return nil, fmt.Errorf("ProviderRepository.ListByAdapterType: %w", err)
+	}
+	return providers, nil
+}
+
+func (r *ProviderRepository) Create(ctx context.Context, p *domain.Provider) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO proxy.providers (id, name, display_name, adapter_type, config, is_active, priority)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		p.ID, p.Name, p.DisplayName, p.AdapterType, p.Config, p.IsActive, p.Priority,
+	)
+	if err != nil {
+		return fmt.Errorf("ProviderRepository.Create: %w", err)
+	}
+	return nil
+}
+
+func (r *ProviderRepository) Update(ctx context.Context, p *domain.Provider) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE proxy.providers
+		 SET name=$2, display_name=$3, adapter_type=$4, config=$5, is_active=$6, priority=$7, updated_at=NOW()
+		 WHERE id=$1`,
+		p.ID, p.Name, p.DisplayName, p.AdapterType, p.Config, p.IsActive, p.Priority,
+	)
+	if err != nil {
+		return fmt.Errorf("ProviderRepository.Update: %w", err)
+	}
+	return nil
+}
+
+func (r *ProviderRepository) ToggleActive(ctx context.Context, id uuid.UUID, active bool) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE proxy.providers SET is_active=$2, updated_at=NOW() WHERE id=$1`,
+		id, active,
+	)
+	if err != nil {
+		return fmt.Errorf("ProviderRepository.ToggleActive: %w", err)
+	}
+	return nil
+}
+
+func (r *ProviderRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM proxy.providers WHERE id=$1`, id,
+	)
+	if err != nil {
+		return fmt.Errorf("ProviderRepository.Delete: %w", err)
+	}
+	return nil
+}
+
+
 // ─── OrderEventRepository ──────────────────────────────────────────────────────
 
 // OrderEventRepository implements domain.IOrderEventRepository using PostgreSQL.

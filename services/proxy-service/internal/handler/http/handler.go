@@ -344,9 +344,9 @@ func (h *Handler) AdminDeleteProduct(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/v1/admin/proxy/providers
+// GET /api/v1/admin/proxy/providers — list ALL providers (active + inactive)
 func (h *Handler) AdminListProviders(w http.ResponseWriter, r *http.Request) {
-	providers, err := h.providerRepo.ListActive(r.Context())
+	providers, err := h.providerRepo.ListAll(r.Context())
 	if err != nil {
 		h.logger.ErrorContext(r.Context(), "AdminListProviders error", slog.String("error", err.Error()))
 		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
@@ -354,6 +354,115 @@ func (h *Handler) AdminListProviders(w http.ResponseWriter, r *http.Request) {
 	}
 	apierror.RespondJSON(w, http.StatusOK, providers)
 }
+
+// POST /api/v1/admin/proxy/providers — create a new provider
+func (h *Handler) AdminCreateProvider(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string          `json:"name"`
+		DisplayName string          `json:"display_name"`
+		AdapterType string          `json:"adapter_type"`
+		Config      json.RawMessage `json:"config"`
+		Priority    int             `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+	if req.Name == "" || req.AdapterType == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "name and adapter_type are required")
+		return
+	}
+	if req.DisplayName == "" {
+		req.DisplayName = req.Name
+	}
+	if len(req.Config) == 0 {
+		req.Config = json.RawMessage(`{}`)
+	}
+
+	provider := &domain.Provider{
+		ID:          uuid.New(),
+		Name:        req.Name,
+		DisplayName: req.DisplayName,
+		AdapterType: req.AdapterType,
+		Config:      req.Config,
+		IsActive:    true,
+		Priority:    req.Priority,
+	}
+
+	if err := h.providerRepo.Create(r.Context(), provider); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminCreateProvider error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, err.Error())
+		return
+	}
+	apierror.RespondJSON(w, http.StatusCreated, provider)
+}
+
+// PUT /api/v1/admin/proxy/providers/{id} — update a provider
+func (h *Handler) AdminUpdateProvider(w http.ResponseWriter, r *http.Request) {
+	providerID := mustParseUUID(chi.URLParam(r, "id"))
+
+	var req struct {
+		Name        string          `json:"name"`
+		DisplayName string          `json:"display_name"`
+		AdapterType string          `json:"adapter_type"`
+		Config      json.RawMessage `json:"config"`
+		Priority    int             `json:"priority"`
+		IsActive    bool            `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
+		return
+	}
+
+	provider := &domain.Provider{
+		ID:          providerID,
+		Name:        req.Name,
+		DisplayName: req.DisplayName,
+		AdapterType: req.AdapterType,
+		Config:      req.Config,
+		IsActive:    req.IsActive,
+		Priority:    req.Priority,
+	}
+
+	if err := h.providerRepo.Update(r.Context(), provider); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminUpdateProvider error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, err.Error())
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, provider)
+}
+
+// PUT /api/v1/admin/proxy/providers/{id}/toggle — toggle active state
+func (h *Handler) AdminToggleProvider(w http.ResponseWriter, r *http.Request) {
+	providerID := mustParseUUID(chi.URLParam(r, "id"))
+
+	existing, err := h.providerRepo.GetByID(r.Context(), providerID)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusNotFound, apierror.CodeNotFound, "provider not found")
+		return
+	}
+
+	newActive := !existing.IsActive
+	if err := h.providerRepo.ToggleActive(r.Context(), providerID, newActive); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminToggleProvider error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, err.Error())
+		return
+	}
+	existing.IsActive = newActive
+	apierror.RespondJSON(w, http.StatusOK, existing)
+}
+
+// DELETE /api/v1/admin/proxy/providers/{id} — delete a provider
+func (h *Handler) AdminDeleteProvider(w http.ResponseWriter, r *http.Request) {
+	providerID := mustParseUUID(chi.URLParam(r, "id"))
+	if err := h.providerRepo.Delete(r.Context(), providerID); err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminDeleteProvider error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 
 // GET /api/v1/admin/proxy/service-options?service_id=X&plan_id=Y
 func (h *Handler) AdminGetServiceOptions(w http.ResponseWriter, r *http.Request) {
@@ -480,6 +589,10 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Put("/products/{id}/toggle", h.AdminToggleProduct)
 				r.Delete("/products/{id}", h.AdminDeleteProduct)
 				r.Get("/providers", h.AdminListProviders)
+				r.Post("/providers", h.AdminCreateProvider)
+				r.Put("/providers/{id}", h.AdminUpdateProvider)
+				r.Put("/providers/{id}/toggle", h.AdminToggleProvider)
+				r.Delete("/providers/{id}", h.AdminDeleteProvider)
 				r.Get("/service-options", h.AdminGetServiceOptions)
 				r.Get("/user-orders", h.AdminGetUserOrders)
 				// PUT /api/v1/admin/proxy/orders/{id}/action
