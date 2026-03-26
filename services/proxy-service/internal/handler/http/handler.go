@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -336,7 +337,16 @@ func (h *Handler) AdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/admin/proxy/products/{id}
 func (h *Handler) AdminDeleteProduct(w http.ResponseWriter, r *http.Request) {
 	productID := mustParseUUID(chi.URLParam(r, "id"))
+
+	// Nullify product_id on terminated orders so FK doesn't block delete
+	_, _ = h.productRepo.DetachTerminatedOrders(r.Context(), productID)
+
 	if err := h.productRepo.Delete(r.Context(), productID); err != nil {
+		// If still blocked by FK (active orders exist), return helpful error
+		if strings.Contains(err.Error(), "violates foreign key") {
+			apierror.Respond(w, r, http.StatusConflict, apierror.CodeConflict, "cannot delete: active orders still reference this product")
+			return
+		}
 		h.logger.ErrorContext(r.Context(), "AdminDeleteProduct error", slog.String("error", err.Error()))
 		apierror.Respond(w, r, http.StatusInternalServerError, apierror.CodeInternalError, "internal error")
 		return

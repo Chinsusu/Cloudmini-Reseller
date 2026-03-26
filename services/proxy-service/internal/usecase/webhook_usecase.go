@@ -103,7 +103,7 @@ func (u *WebhookUsecase) FulfillFromProxyCheap(ctx context.Context, providerOrde
 		expiresAtPtr = &expiresAt
 	} else {
 		// Fall back to product duration
-		product, err := u.productRepo.GetByID(ctx, order.ProductID)
+		product, err := u.productRepo.GetByID(ctx, *order.ProductID)
 		if err == nil && product.DurationDays != nil {
 			t := activatedAt.AddDate(0, 0, *product.DurationDays)
 			expiresAtPtr = &t
