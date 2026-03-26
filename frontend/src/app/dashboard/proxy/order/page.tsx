@@ -147,6 +147,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
     const [ispId, setIspId] = useState('')
     const [periodMonths, setPeriodMonths] = useState(1)
     const [protocol, setProtocol] = useState('default')
+    const [groupId, setGroupId] = useState('')
     const [placing, setPlacing] = useState(false)
 
     const meta = product.metadata ?? {}
@@ -168,9 +169,21 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
         ? (optData.data.data.isps[country] ?? [])
         : []
 
+    // Fetch groups for this product (VPM only)
+    const { data: groupsData } = useQuery({
+        queryKey: ['product-groups', product.id],
+        queryFn: () => proxyAPI.getProductGroups(product.id),
+        staleTime: 120_000,
+    })
+    const groups: any[] = groupsData?.data?.data ?? groupsData?.data ?? []
+
     const handleOrder = async () => {
         if (isStatic && countries.length > 0 && !country) {
             toastError('Please select a country')
+            return
+        }
+        if (groups.length > 0 && !groupId) {
+            toastError('Vui lòng chọn khu vực')
             return
         }
         const payload = {
@@ -182,6 +195,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                 ...(country ? { country_code: country } : {}),
                 ...(ispId ? { isp_id: ispId } : {}),
                 ...(isStatic ? { period_months: String(periodMonths) } : {}),
+                ...(groupId ? { group_id: groupId } : {}),
                 protocol,
             },
         }
@@ -243,6 +257,34 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                     ))}
                 </div>
             </div>
+
+            {/* Group selector — VPM products */}
+            {groups.length > 0 && (
+                <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '.78rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '.45rem' }}>
+                        Khu vực
+                    </label>
+                    <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
+                        {groups.map((g: any) => (
+                            <button key={g.id} onClick={() => setGroupId(g.id)}
+                                style={{
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                                    padding: '.45rem .9rem',
+                                    borderRadius: 'var(--radius)',
+                                    border: groupId === g.id ? '1.5px solid var(--dc-gold)' : '1px solid var(--border)',
+                                    background: groupId === g.id ? 'rgba(230,168,23,.08)' : 'var(--surface)',
+                                    color: groupId === g.id ? 'var(--dc-gold)' : 'var(--text)',
+                                    cursor: 'pointer', transition: 'all .15s', gap: '.1rem',
+                                }}>
+                                <span style={{ fontWeight: 700, fontSize: '.82rem' }}>📍 {g.name}</span>
+                                {g.available_ips > 0 && (
+                                    <span style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>{g.available_ips} IPs</span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Config form */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -338,6 +380,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
         </div>
     )
 }
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function OrderProxyPage() {

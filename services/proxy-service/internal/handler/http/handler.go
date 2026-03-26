@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -497,6 +498,78 @@ func (h *Handler) AdminGetProviderGroups(w http.ResponseWriter, r *http.Request)
 	apierror.RespondJSON(w, http.StatusOK, groups)
 }
 
+// GET /api/v1/proxy/products/{id}/groups — public: fetch groups for a product
+func (h *Handler) GetProductGroups(w http.ResponseWriter, r *http.Request) {
+	productID := mustParseUUID(chi.URLParam(r, "id"))
+
+	product, err := h.productRepo.GetByID(r.Context(), productID)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusNotFound, apierror.CodeNotFound, "product not found")
+		return
+	}
+
+	// Read group_ids from product metadata
+	var pmeta map[string]string
+	if product.Metadata != nil {
+		_ = json.Unmarshal(product.Metadata, &pmeta)
+	}
+	allowedIDs := map[string]bool{}
+	if gids, ok := pmeta["group_ids"]; ok && gids != "" {
+		for _, id := range splitCSV(gids) {
+			allowedIDs[id] = true
+		}
+	}
+
+	// Fetch provider
+	provider, err := h.providerRepo.GetByID(r.Context(), product.ProviderID)
+	if err != nil || provider.AdapterType != "vpm" {
+		apierror.RespondJSON(w, http.StatusOK, []any{}) // no groups for non-VPM
+		return
+	}
+
+	var cfg struct {
+		BaseURL string `json:"base_url"`
+		APIKey  string `json:"api_key"`
+	}
+	if err := json.Unmarshal(provider.Config, &cfg); err != nil || cfg.BaseURL == "" {
+		apierror.RespondJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	client := vpm.NewClient(cfg.BaseURL, cfg.APIKey)
+	groups, err := client.ListGroups(r.Context())
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "GetProductGroups error", slog.String("error", err.Error()))
+		apierror.RespondJSON(w, http.StatusOK, []any{})
+		return
+	}
+
+	// Filter to only allowed groups if product has group_ids set
+	if len(allowedIDs) > 0 {
+		filtered := make([]vpm.ProxyGroup, 0, len(allowedIDs))
+		for _, g := range groups {
+			if allowedIDs[g.ID] {
+				filtered = append(filtered, g)
+			}
+		}
+		groups = filtered
+	}
+
+	apierror.RespondJSON(w, http.StatusOK, groups)
+}
+
+// splitCSV splits a comma-separated string into trimmed non-empty parts.
+func splitCSV(s string) []string {
+	parts := []string{}
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
+}
+
 // GET /api/v1/admin/proxy/service-options?service_id=X&plan_id=Y
 func (h *Handler) AdminGetServiceOptions(w http.ResponseWriter, r *http.Request) {
 	if h.proxyCheapClient == nil {
@@ -602,6 +675,7 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 
 		r.Route("/api/v1/proxy", func(r chi.Router) {
 			r.Get("/products", h.ListProducts)
+			r.Get("/products/{id}/groups", h.GetProductGroups)
 			r.Get("/orders", h.ListOrders)
 				r.Post("/orders", h.CreateOrder)
 				r.Get("/orders/{id}", h.GetOrder)
