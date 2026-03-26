@@ -103,18 +103,43 @@ function AdapterMetaFields({ adapterType, meta, setMeta }: {
 function AddProductModal({ onClose }: { onClose: () => void }) {
     const qc = useQueryClient()
     const { success, error: toastError } = useToast()
-    const [form, setForm] = useState({ name: '', proxy_type: 'residential', protocol: 'http', location: '', duration_days: '', bandwidth_gb: '', base_cost: '', provider_id: '' })
+    const [form, setForm] = useState({ name: '', proxy_type: 'residential', location: '', duration_days: '', bandwidth_gb: '', base_cost: '', provider_id: '' })
+    const [protocols, setProtocols] = useState<string[]>(['http', 'socks5'])
+    const [selectedGroups, setSelectedGroups] = useState<string[]>([])
     const [meta, setMeta] = useState<Record<string, string>>({})
     const { data: providersData } = useQuery({ queryKey: ['admin-proxy-providers'], queryFn: () => adminAPI.listProxyProviders(), staleTime: 60_000 })
     const providers: any[] = providersData?.data?.data ?? providersData?.data ?? []
     const selectedProvider = providers.find(p => p.id === form.provider_id)
 
+    // Fetch groups when VPM provider selected
+    const { data: groupsData, isLoading: groupsLoading } = useQuery({
+        queryKey: ['provider-groups', form.provider_id],
+        queryFn: () => adminAPI.getProviderGroups(form.provider_id),
+        enabled: !!form.provider_id && selectedProvider?.adapter_type === 'vpm',
+        staleTime: 60_000,
+    })
+    const groups: any[] = groupsData?.data?.data ?? groupsData?.data ?? []
+
+    const toggleProtocol = (p: string) => {
+        setProtocols(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+    }
+    const toggleGroup = (gid: string) => {
+        setSelectedGroups(prev => prev.includes(gid) ? prev.filter(x => x !== gid) : [...prev, gid])
+    }
+
     const mut = useMutation({
         mutationFn: () => {
-            const payload: Record<string, any> = { name: form.name, proxy_type: form.proxy_type, protocol: form.protocol, location: form.location, base_cost: form.base_cost, provider_id: form.provider_id }
+            const payload: Record<string, any> = {
+                name: form.name, proxy_type: form.proxy_type,
+                protocol: protocols.join(','),
+                location: form.location || selectedGroups.map(gid => groups.find((g: any) => g.id === gid)?.name).filter(Boolean).join(', '),
+                base_cost: form.base_cost, provider_id: form.provider_id,
+            }
             if (form.duration_days !== '') payload.duration_days = parseInt(form.duration_days, 10)
             if (form.bandwidth_gb !== '') payload.bandwidth_gb = form.bandwidth_gb
-            const m = Object.fromEntries(Object.entries(meta).filter(([k, v]) => v !== '' && !k.startsWith('_')))
+            // Store selected group IDs in metadata
+            const m: Record<string, any> = Object.fromEntries(Object.entries(meta).filter(([k, v]) => v !== '' && !k.startsWith('_')))
+            if (selectedGroups.length > 0) m.group_ids = selectedGroups.join(',')
             if (Object.keys(m).length > 0) payload.metadata = m
             return adminAPI.createProxyProduct(payload)
         },
@@ -138,25 +163,80 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                                 <option value="residential">Residential</option><option value="datacenter">Datacenter</option><option value="mobile">Mobile</option>
                             </select>
                         </div>
-                        <div className="form-group"><label>Protocol</label>
-                            <select className="input" value={form.protocol} onChange={set('protocol')}>
-                                <option value="http">HTTP</option><option value="socks5">SOCKS5</option>
-                            </select>
+
+                        {/* Protocol — checkboxes */}
+                        <div className="form-group">
+                            <label>Protocol</label>
+                            <div style={{ display: 'flex', gap: '.75rem', padding: '.5rem 0' }}>
+                                {['http', 'socks5'].map(p => (
+                                    <label key={p} style={{ display: 'flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer', fontSize: '.88rem', fontWeight: 500 }}>
+                                        <input type="checkbox" checked={protocols.includes(p)} onChange={() => toggleProtocol(p)}
+                                            style={{ width: 16, height: 16, accentColor: 'var(--primary)' }} />
+                                        {p.toUpperCase()}
+                                    </label>
+                                ))}
+                            </div>
                         </div>
-                        <div className="form-group"><label>Location label (optional)</label><input className="input" placeholder="Global, US, EU..." value={form.location} onChange={set('location')} /></div>
+
                         <div className="form-group"><label>Base Cost ($)</label><input className="input" type="number" step="0.01" min="0" placeholder="5.00" value={form.base_cost} onChange={set('base_cost')} /></div>
                         <div className="form-group"><label>Duration (days, optional)</label><input className="input" type="number" min="1" placeholder="30" value={form.duration_days} onChange={set('duration_days')} /></div>
                         <div className="form-group"><label>Bandwidth GB (optional)</label><input className="input" type="number" step="0.1" min="0" placeholder="10" value={form.bandwidth_gb} onChange={set('bandwidth_gb')} /></div>
+
+                        {/* Provider */}
                         <div className="form-group" style={{ gridColumn: '1/-1' }}>
                             <label>Provider</label>
                             {providers.length === 0
                                 ? <div style={{ padding: '.6rem .75rem', borderRadius: 'var(--radius)', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', fontSize: '.85rem', color: 'var(--text-muted)' }}>No providers — add one in <strong>Proxy Providers</strong> first.</div>
-                                : <select className="input" value={form.provider_id} onChange={e => { set('provider_id')(e); setMeta({}) }}>
+                                : <select className="input" value={form.provider_id} onChange={e => { set('provider_id')(e); setMeta({}); setSelectedGroups([]) }}>
                                     <option value="">— Select provider —</option>
                                     {providers.map((p: any) => <option key={p.id} value={p.id}>{p.display_name || p.name} ({p.adapter_type})</option>)}
                                 </select>
                             }
                         </div>
+
+                        {/* Groups / Location — VPM providers */}
+                        {selectedProvider?.adapter_type === 'vpm' && (
+                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                                <label>Location (Groups)</label>
+                                {groupsLoading ? (
+                                    <div style={{ padding: '.5rem', color: 'var(--text-muted)', fontSize: '.85rem' }}>Loading groups...</div>
+                                ) : groups.length === 0 ? (
+                                    <div style={{ padding: '.5rem', color: 'var(--text-muted)', fontSize: '.85rem' }}>No groups available</div>
+                                ) : (
+                                    <div style={{
+                                        background: 'var(--bg-secondary)', border: '1px solid var(--border-light)',
+                                        borderRadius: 'var(--radius)', padding: '.6rem .75rem',
+                                        display: 'flex', flexWrap: 'wrap', gap: '.5rem',
+                                    }}>
+                                        {groups.map((g: any) => (
+                                            <label key={g.id} style={{
+                                                display: 'flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer',
+                                                padding: '.35rem .65rem', borderRadius: 6, fontSize: '.82rem', fontWeight: 500,
+                                                background: selectedGroups.includes(g.id) ? 'var(--primary)' : 'rgba(255,255,255,.06)',
+                                                color: selectedGroups.includes(g.id) ? '#fff' : 'var(--text)',
+                                                border: '1px solid ' + (selectedGroups.includes(g.id) ? 'var(--primary)' : 'var(--border)'),
+                                                transition: 'all .15s',
+                                            }}>
+                                                <input type="checkbox" checked={selectedGroups.includes(g.id)} onChange={() => toggleGroup(g.id)}
+                                                    style={{ display: 'none' }} />
+                                                {g.name}
+                                                {g.available_ips > 0 && <span style={{ fontSize: '.7rem', opacity: .7 }}>({g.available_ips} IPs)</span>}
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Non-VPM: Location text field */}
+                        {selectedProvider && selectedProvider.adapter_type !== 'vpm' && (
+                            <div className="form-group" style={{ gridColumn: '1/-1' }}>
+                                <label>Location label (optional)</label>
+                                <input className="input" placeholder="Global, US, EU..." value={form.location} onChange={set('location')} />
+                            </div>
+                        )}
+
+                        {/* Provider Plan Configuration */}
                         {selectedProvider && (
                             <div style={{ gridColumn: '1/-1' }}>
                                 <label style={{ marginBottom: '.4rem', display: 'block' }}>Provider Plan Configuration</label>
@@ -165,7 +245,7 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                         )}
                     </div>
                     <button className="btn-primary" style={{ width: '100%', marginTop: '.75rem' }}
-                        onClick={() => mut.mutate()} disabled={!form.name || !form.base_cost || !form.provider_id || mut.isPending}>
+                        onClick={() => mut.mutate()} disabled={!form.name || !form.base_cost || !form.provider_id || protocols.length === 0 || mut.isPending}>
                         {mut.isPending ? 'Creating...' : 'Create Product'}
                     </button>
                 </div>
@@ -173,6 +253,7 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
         </div>
     )
 }
+
 
 // ─── Edit Product Modal ────────────────────────────────────────────────────────
 function EditProductModal({ product, providers, onClose }: { product: any, providers: any[], onClose: () => void }) {

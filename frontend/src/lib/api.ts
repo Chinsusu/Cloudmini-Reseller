@@ -170,6 +170,7 @@ export const adminAPI = {
     updateProxyProvider: (id: string, data: Record<string, any>) => api.put(`/v1/admin/proxy/providers/${id}`, data),
     toggleProxyProvider: (id: string) => api.put(`/v1/admin/proxy/providers/${id}/toggle`),
     deleteProxyProvider: (id: string) => api.delete(`/v1/admin/proxy/providers/${id}`),
+    getProviderGroups: (providerId: string) => api.get(`/v1/admin/proxy/providers/${providerId}/groups`),
     getProxyServiceOptions: (serviceId: string, planId?: string) =>
         api.get(`/v1/admin/proxy/service-options?service_id=${serviceId}${planId ? `&plan_id=${planId}` : ''}`),
     // VPS plan management

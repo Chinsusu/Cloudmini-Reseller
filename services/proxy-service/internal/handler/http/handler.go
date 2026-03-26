@@ -14,6 +14,7 @@ import (
 	"github.com/pvp/pkg/pagination"
 	"github.com/pvp/proxy-service/internal/domain"
 	proxycheap "github.com/pvp/proxy-service/internal/providers/proxy_cheap"
+	"github.com/pvp/proxy-service/internal/providers/vpm"
 	"github.com/pvp/proxy-service/internal/usecase"
 	"github.com/shopspring/decimal"
 )
@@ -463,6 +464,38 @@ func (h *Handler) AdminDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /api/v1/admin/proxy/providers/{id}/groups — fetch groups from a VPM provider
+func (h *Handler) AdminGetProviderGroups(w http.ResponseWriter, r *http.Request) {
+	providerID := mustParseUUID(chi.URLParam(r, "id"))
+
+	provider, err := h.providerRepo.GetByID(r.Context(), providerID)
+	if err != nil {
+		apierror.Respond(w, r, http.StatusNotFound, apierror.CodeNotFound, "provider not found")
+		return
+	}
+	if provider.AdapterType != "vpm" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "groups only available for VPM providers")
+		return
+	}
+
+	var cfg struct {
+		BaseURL string `json:"base_url"`
+		APIKey  string `json:"api_key"`
+	}
+	if err := json.Unmarshal(provider.Config, &cfg); err != nil || cfg.BaseURL == "" {
+		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid provider config")
+		return
+	}
+
+	client := vpm.NewClient(cfg.BaseURL, cfg.APIKey)
+	groups, err := client.ListGroups(r.Context())
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "AdminGetProviderGroups error", slog.String("error", err.Error()))
+		apierror.Respond(w, r, http.StatusBadGateway, apierror.CodeInternalError, "failed to fetch groups from provider")
+		return
+	}
+	apierror.RespondJSON(w, http.StatusOK, groups)
+}
 
 // GET /api/v1/admin/proxy/service-options?service_id=X&plan_id=Y
 func (h *Handler) AdminGetServiceOptions(w http.ResponseWriter, r *http.Request) {
@@ -593,6 +626,7 @@ func NewRouter(h *Handler, jwtSecret []byte, auditLogger middleware.AuditLogger)
 				r.Put("/providers/{id}", h.AdminUpdateProvider)
 				r.Put("/providers/{id}/toggle", h.AdminToggleProvider)
 				r.Delete("/providers/{id}", h.AdminDeleteProvider)
+				r.Get("/providers/{id}/groups", h.AdminGetProviderGroups)
 				r.Get("/service-options", h.AdminGetServiceOptions)
 				r.Get("/user-orders", h.AdminGetUserOrders)
 				// PUT /api/v1/admin/proxy/orders/{id}/action
