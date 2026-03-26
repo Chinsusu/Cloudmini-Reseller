@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/pvp/proxy-service/internal/providers"
 )
@@ -19,20 +18,20 @@ const ProviderName = "vpm"
 // Stored encrypted in proxy.providers.config JSONB.
 type Config struct {
 	BaseURL string `json:"base_url"` // e.g. "https://cz.resvn.net"
-	APIKey  string `json:"api_key"`  // access_code from VPM
+	APIKey  string `json:"api_key"`  // API key (X-API-Key header)
 }
 
-// Adapter implements providers.IProxyProvider for the VPS Proxy Manager (API v2).
-// VPM is a synchronous provider: POST /api/v2/proxies returns credentials immediately.
+// Adapter implements providers.IProxyProvider for the VPS Proxy Manager (Billing API V1).
+// VPM V1 is async: POST /api/v1/proxies returns status="creating",
+// we poll until "running" before returning credentials.
 //
-// Protocol behaviour (v2):
-//   - "default" → 2 proxy objects in response (HTTP + SOCKS5, same IP/auth)
-//     ProviderOrderID stored as "http_id|socks_id"
-//   - "http"    → 1 proxy object  (port_socks: null)
-//   - "socks5"  → 1 proxy object  (port_http: null)
+// Protocol behaviour:
+//   - "default" → response has both port_http and port_socks → 2 credentials (HTTP + SOCKS5)
+//   - "http"    → port_http only → 1 credential
+//   - "socks5"  → port_socks only → 1 credential
+//   - vmess/vless/shadowsocks/trojan → use connect_url or connection_string
 //
-// Legacy v1 provider_order_ids (plain UUID, no "|") are handled transparently
-// via fallback to v1 client methods in Cancel/Suspend/Resume/CheckStatus.
+// ProviderOrderID = plain proxy UUID (one DELETE removes all ports).
 type Adapter struct {
 	client *Client
 	cfg    Config
@@ -55,12 +54,14 @@ func NewAdapterWithClient(cfg Config, client *Client) *Adapter {
 
 // ─── Purchase ─────────────────────────────────────────────────────────────────
 
-// Purchase calls POST /api/v2/proxies and returns credentials synchronously.
+// Purchase calls POST /api/v1/proxies, polls until running, and returns credentials.
 //
-// PurchaseRequest.Metadata keys (v2):
+// PurchaseRequest.Metadata keys:
+//   - "protocol"           — "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"
 //   - "group_id"           — VPM region/group UUID
-//   - "protocol"           — "default"|"http"|"socks5" (default: "default")
-//   - "ipv4"               — specific IP (optional; VPM auto-selects if empty)
+//   - "listen_ip"          — specific IP (optional; VPM auto-selects if empty)
+//   - "ip_address_id"      — specific IP UUID
+//   - "ip_range_id"        — specific IP range UUID
 //   - "bandwidth_limit_mb" — integer string, 0 = unlimited
 //   - "speed_limit_mbps"   — integer string
 func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (*providers.PurchaseResult, error) {
@@ -77,9 +78,16 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 		protocol = "default"
 	}
 
-	createReq := CreateProxyV2Request{
-		Protocol: protocol,
-		GroupID:  m["group_id"],
+	createReq := CreateProxyRequest{
+		Protocol:    protocol,
+		GroupID:     m["group_id"],
+		ListenIP:    m["listen_ip"],
+		IPAddressID: m["ip_address_id"],
+		IPRangeID:   m["ip_range_id"],
+	}
+	// Backward compat: old metadata used "ipv4" key → map to listen_ip
+	if createReq.ListenIP == "" && m["ipv4"] != "" {
+		createReq.ListenIP = m["ipv4"]
 	}
 	if s := m["bandwidth_limit_mb"]; s != "" {
 		if v, err := strconv.Atoi(s); err == nil {
@@ -92,111 +100,110 @@ func (a *Adapter) Purchase(ctx context.Context, req providers.PurchaseRequest) (
 		}
 	}
 
-	// Default: POST /api/v2/ipv4 with specific IP from metadata.
-	// Region-based creation (POST /api/v2/proxies with group_id) is reserved for future use.
-	ipv4 := m["ipv4"]
-
 	a.logger.InfoContext(ctx, "vpm.Purchase",
 		slog.String("protocol", protocol),
-		slog.String("ipv4", ipv4),
-		slog.String("group_id", m["group_id"]),
+		slog.String("listen_ip", createReq.ListenIP),
+		slog.String("group_id", createReq.GroupID),
 		slog.String("req_protocol", req.Protocol),
 		slog.String("meta_protocol", m["protocol"]),
 	)
 
-	var proxies []ProxySummaryV2
-	var err error
-	if ipv4 != "" {
-		proxies, err = a.client.CreateProxyByIPV4(ctx, ipv4, protocol)
-	} else {
-		proxies, err = a.client.CreateProxyV2(ctx, createReq)
-	}
+	// Create proxy and wait until running (async V1 flow)
+	proxy, err := a.client.CreateProxyAndWait(ctx, createReq)
 	if err != nil {
 		return nil, mapError(err)
 	}
-	if len(proxies) == 0 {
-		return nil, fmt.Errorf("%w: vpm returned empty proxy list", providers.ErrProviderUnavailable)
+
+	// Check for error status after polling
+	if proxy.Status == "error" {
+		return nil, fmt.Errorf("%w: vpm proxy creation failed with status 'error'", providers.ErrProviderUnavailable)
 	}
 
-	// Build credentials from response.
-	// Per VPM API v2:
-	//   - protocol=default → single object with BOTH port_http and port_socks → create 2 credentials
-	//   - protocol=http    → port_http only
-	//   - protocol=socks5  → port_socks only
-	//   - vmess/vless/ss/trojan/wireguard → use connection_string
-	var creds []providers.ProxyCredential
-	for _, p := range proxies {
-		switch p.Protocol {
-		case "default":
-			// New VPM behavior: single object carries BOTH ports
-			if p.PortHTTP > 0 {
-				creds = append(creds, providers.ProxyCredential{
-					Host: p.IPv4, Port: p.PortHTTP,
-					Username: p.Username, Password: p.Password,
-					Protocol: "http",
-				})
-			}
-			if p.PortSOCKS > 0 {
-				creds = append(creds, providers.ProxyCredential{
-					Host: p.IPv4, Port: p.PortSOCKS,
-					Username: p.Username, Password: p.Password,
-					Protocol: "socks5",
-				})
-			}
-		case "http":
-			if p.PortHTTP > 0 {
-				creds = append(creds, providers.ProxyCredential{
-					Host: p.IPv4, Port: p.PortHTTP,
-					Username: p.Username, Password: p.Password,
-					Protocol: "http",
-				})
-			}
-		case "socks5":
-			if p.PortSOCKS > 0 {
-				creds = append(creds, providers.ProxyCredential{
-					Host: p.IPv4, Port: p.PortSOCKS,
-					Username: p.Username, Password: p.Password,
-					Protocol: "socks5",
-				})
-			}
-		default:
-			// vmess, vless, shadowsocks, trojan, wireguard — use connection_string
-			port := p.effectivePort()
-			creds = append(creds, providers.ProxyCredential{
-				Host: p.IPv4, Port: port,
-				Username: p.Username, Password: p.Password,
-				Protocol:         p.Protocol,
-				ConnectionString: p.ConnectionString,
-			})
-		}
-	}
+	// Build credentials from response
+	creds := buildCredentials(proxy)
 	if len(creds) == 0 {
 		return nil, fmt.Errorf("%w: vpm returned no usable credentials", providers.ErrProviderUnavailable)
 	}
 
-	// ProviderOrderID: first proxy ID (one DELETE removes all ports for default protocol)
-	providerOrderID := proxies[0].ID
-
 	return &providers.PurchaseResult{
-		ProviderOrderID: providerOrderID,
+		ProviderOrderID: proxy.ID,
 		Credentials:     creds,
 	}, nil
+}
+
+// buildCredentials creates ProxyCredential slice from a ProxySummary.
+func buildCredentials(p *ProxySummary) []providers.ProxyCredential {
+	host := p.effectiveHost()
+	var creds []providers.ProxyCredential
+
+	switch p.Protocol {
+	case "default":
+		// Dual port: create both HTTP and SOCKS5 credentials
+		if p.PortHTTP > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host: host, Port: p.PortHTTP,
+				Username: p.AuthUser, Password: p.AuthPass,
+				Protocol: "http",
+			})
+		}
+		if p.PortSOCKS > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host: host, Port: p.PortSOCKS,
+				Username: p.AuthUser, Password: p.AuthPass,
+				Protocol: "socks5",
+			})
+		}
+	case "http":
+		port := p.PortHTTP
+		if port == 0 {
+			port = p.Port
+		}
+		if port > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host: host, Port: port,
+				Username: p.AuthUser, Password: p.AuthPass,
+				Protocol: "http",
+			})
+		}
+	case "socks5":
+		port := p.PortSOCKS
+		if port == 0 {
+			port = p.Port
+		}
+		if port > 0 {
+			creds = append(creds, providers.ProxyCredential{
+				Host: host, Port: port,
+				Username: p.AuthUser, Password: p.AuthPass,
+				Protocol: "socks5",
+			})
+		}
+	default:
+		// vmess, vless, shadowsocks, trojan — use connect_url or connection_string
+		connStr := p.ConnectURL
+		if connStr == "" {
+			connStr = p.ConnectionString
+		}
+		creds = append(creds, providers.ProxyCredential{
+			Host: host, Port: p.effectivePort(),
+			Username:         p.AuthUser,
+			Password:         p.AuthPass,
+			Protocol:         p.Protocol,
+			ConnectionString: connStr,
+		})
+	}
+	return creds
 }
 
 // ─── Cancel ───────────────────────────────────────────────────────────────────
 
 // Cancel permanently deletes a proxy from VPM.
-// DELETE /api/v2/ipv4/{id}?access_code=<key>
-// A single DELETE removes both HTTP and SOCKS5 inbounds for default-protocol proxies.
-// NOT_FOUND (404) is treated as success — proxy already gone or was never on v2.
+// DELETE /api/v1/proxies/{id} → 204 No Content
+// NOT_FOUND (404) is treated as success (idempotent).
 func (a *Adapter) Cancel(ctx context.Context, providerOrderID string) error {
-	id := firstID(providerOrderID)
-	if err := a.client.DeleteProxyV2(ctx, id); err != nil {
+	if err := a.client.DeleteProxy(ctx, providerOrderID); err != nil {
 		var apiErr *APIError
 		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
-			// Proxy not found on v2 — already deleted or legacy v1 proxy.
-			// Treat as success (idempotent).
-			return nil
+			return nil // already deleted
 		}
 		return mapError(err)
 	}
@@ -205,93 +212,48 @@ func (a *Adapter) Cancel(ctx context.Context, providerOrderID string) error {
 
 // ─── Suspend ──────────────────────────────────────────────────────────────────
 
-// Suspend calls POST /api/v2/ipv4/{id}/suspend.
-// For default-protocol proxies, suspending the first ID suspends the whole pair.
-// Legacy v1 IDs fall back to StopProxy.
+// Suspend stops a running proxy (V1 API uses stop instead of lock).
+// POST /api/v1/proxies/{id}/stop
 func (a *Adapter) Suspend(ctx context.Context, providerOrderID string) error {
-	id := firstID(providerOrderID)
-	if err := a.client.SuspendProxyV2(ctx, id); err != nil {
-		_ = a.client.StopProxy(ctx, id) // v1 fallback
+	if err := a.client.StopProxy(ctx, providerOrderID); err != nil {
+		return mapError(err)
 	}
 	return nil
 }
 
 // ─── Resume ───────────────────────────────────────────────────────────────────
 
-// Resume calls POST /api/v2/ipv4/{id}/resume.
-// For default-protocol proxies, resuming the first ID resumes the whole pair.
-// Legacy v1 IDs fall back to StartProxy.
+// Resume starts a stopped proxy.
+// POST /api/v1/proxies/{id}/start
 func (a *Adapter) Resume(ctx context.Context, providerOrderID string) error {
-	id := firstID(providerOrderID)
-	if err := a.client.ResumeProxyV2(ctx, id); err != nil {
-		_ = a.client.StartProxy(ctx, id) // v1 fallback
+	if err := a.client.StartProxy(ctx, providerOrderID); err != nil {
+		return mapError(err)
 	}
 	return nil
 }
 
 // ─── CheckStatus ──────────────────────────────────────────────────────────────
 
-// CheckStatus calls GET /api/v2/proxies/{id} using the first ID in the pair.
+// CheckStatus calls GET /api/v1/proxies/{id}.
 //
-// VPM v2 status → Cloudmini:
+// VPM status → Cloudmini:
 //
-//	"completed"  → "active"
-//	"suspended"  → "active"   (proxy is reserved during grace period)
-//	"error"      → "failed"
-//	others       → "processing"
+//	"running"   → "active"
+//	"stopped"   → "active"   (proxy is reserved, just paused)
+//	"creating"  → "processing"
+//	"error"     → "failed"
 func (a *Adapter) CheckStatus(ctx context.Context, providerOrderID string) (string, error) {
-	id := firstID(providerOrderID)
-
-	// Try v2 first
-	proxy, err := a.client.GetProxyV2(ctx, id)
-	if err == nil {
-		return mapStatusV2(proxy.Status), nil
-	}
-	// Fallback to v1 for legacy orders
-	proxyV1, err2 := a.client.GetProxy(ctx, id)
-	if err2 != nil {
+	proxy, err := a.client.GetProxy(ctx, providerOrderID)
+	if err != nil {
 		return "", mapError(err)
 	}
-	return mapStatusV1(proxyV1.Status), nil
+	return mapStatus(proxy.Status), nil
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// splitIDs splits a ProviderOrderID that may contain "|" into individual IDs.
-func splitIDs(providerOrderID string) []string {
-	parts := strings.Split(providerOrderID, "|")
-	var ids []string
-	for _, p := range parts {
-		if s := strings.TrimSpace(p); s != "" {
-			ids = append(ids, s)
-		}
-	}
-	return ids
-}
-
-// firstID returns the first ID from a potentially pipe-separated ProviderOrderID.
-func firstID(providerOrderID string) string {
-	ids := splitIDs(providerOrderID)
-	if len(ids) == 0 {
-		return providerOrderID
-	}
-	return ids[0]
-}
-
-// mapStatusV2 converts VPM v2 proxy status strings to Cloudmini constants.
-func mapStatusV2(s string) string {
-	switch s {
-	case "completed", "suspended":
-		return "active"
-	case "error":
-		return "failed"
-	default:
-		return "processing"
-	}
-}
-
-// mapStatusV1 converts VPM v1 proxy status strings to Cloudmini constants (legacy).
-func mapStatusV1(s string) string {
+// mapStatus converts VPM proxy status strings to Cloudmini constants.
+func mapStatus(s string) string {
 	switch s {
 	case "running", "stopped":
 		return "active"

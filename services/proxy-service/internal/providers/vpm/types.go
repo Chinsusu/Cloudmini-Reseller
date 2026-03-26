@@ -1,95 +1,102 @@
 // Package vpm provides a proxy provider adapter for the VPS Proxy Manager (VPM) API.
 // VPM is an internal service that manages proxy allocation on physical nodes.
+// Current integration: Billing API V1 — https://cz.resvn.net/billing-docs-v1
 package vpm
 
 import "encoding/json"
 
-// ─── API v2 Types (current) ───────────────────────────────────────────────────
+// ─── API v1 Types ─────────────────────────────────────────────────────────────
 
-// CreateProxyV2Request is the request body for POST /api/v2/proxies.
-// auth is via ?access_code= query parameter.
-type CreateProxyV2Request struct {
-	Protocol         string `json:"protocol"`                    // "default"|"socks5"|"http"
-	GroupID          string `json:"group_id,omitempty"`          // region/group UUID (replaces ip_range_id)
-	IPv4             string `json:"ipv4,omitempty"`              // specific IP (use /api/v2/ipv4 instead)
-	Count            int    `json:"count,omitempty"`             // batch count (default 1)
+// CreateProxyRequest is the request body for POST /api/v1/proxies.
+type CreateProxyRequest struct {
+	Protocol         string `json:"protocol"`                      // "default"|"socks5"|"http"|"vmess"|"vless"|"shadowsocks"|"trojan"
+	GroupID          string `json:"group_id,omitempty"`             // region/group UUID
+	IPRangeID        string `json:"ip_range_id,omitempty"`          // specific IP range
+	IPAddressID      string `json:"ip_address_id,omitempty"`        // specific IP address UUID
+	ListenIP         string `json:"listen_ip,omitempty"`            // bind to specific IP (e.g. "103.151.53.41")
+	AuthUser         string `json:"auth_user,omitempty"`            // custom username (auto-generated if empty)
+	AuthPass         string `json:"auth_pass,omitempty"`            // custom password (auto-generated if empty)
 	BandwidthLimitMB int    `json:"bandwidth_limit_mb,omitempty"`
 	SpeedLimitMbps   int    `json:"speed_limit_mbps,omitempty"`
+	SSMethod         string `json:"ss_method,omitempty"`            // Shadowsocks cipher (e.g. "chacha20-ietf-poly1305")
+	RealityDest      string `json:"reality_dest,omitempty"`         // VLESS Reality destination (e.g. "google.com:443")
 }
 
-// ProxySummaryV2 is the single-object response returned by POST/GET /api/v2/ipv4/:ipv4.
-// Note: docs v2 returns data as a SINGLE OBJECT (not an array).
-type ProxySummaryV2 struct {
+// ProxySummary is the response object returned by POST/GET /api/v1/proxies.
+type ProxySummary struct {
 	ID               string          `json:"id"`
-	IPv4             string          `json:"ipv4"`
-	IPv6             *string         `json:"ipv6"`
-	Username         string          `json:"username"`
-	Password         string          `json:"password"`
-	PortHTTP         int             `json:"port_http"`  // >0 for http/default protocols
-	PortSOCKS        int             `json:"port_socks"` // >0 for socks5/default protocols
-	Protocol         string          `json:"protocol"`   // "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"|"wireguard"
-	ProtocolConfig   json.RawMessage `json:"protocol_config"` // protocol-specific config (VMess/VLESS/SS/Trojan/WireGuard)
-	ConnectionString string          `json:"connection_string"`
-	Status           string          `json:"status"` // "completed"|"suspended"|"error"
+	Host             string          `json:"host"`              // listen IP
+	Port             int             `json:"port"`              // primary port
+	PortHTTP         int             `json:"port_http"`         // >0 for http/default protocols
+	PortSOCKS        int             `json:"port_socks"`        // >0 for socks5/default protocols
+	Protocol         string          `json:"protocol"`          // "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"
+	OutboundIP       string          `json:"outbound_ip"`       // exit IP
+	AuthUser         string          `json:"auth_user"`         // proxy username
+	AuthPass         string          `json:"auth_pass"`         // proxy password
+	Status           string          `json:"status"`            // "creating"|"running"|"stopped"|"error"
+	BandwidthUp      int64           `json:"bandwidth_up"`      // bytes uploaded
+	BandwidthDown    int64           `json:"bandwidth_down"`    // bytes downloaded
+	BandwidthLimitMB int             `json:"bandwidth_limit_mb"`
+	SpeedLimitMbps   int             `json:"speed_limit_mbps"`
+	CurrentSpeedBps  int64           `json:"current_speed_bps"`
+	ConnectURL       string          `json:"connect_url"`       // ready-to-use connection string
+	ConnectionString string          `json:"connection_string"` // alternative connection string (VPN protocols)
+	ProtocolConfig   json.RawMessage `json:"protocol_config"`   // protocol-specific config
+	CreatedAt        string          `json:"created_at"`
+	UpdatedAt        string          `json:"updated_at"`
 }
 
 // effectivePort returns the port for credential building.
-func (s *ProxySummaryV2) effectivePort() int {
+func (s *ProxySummary) effectivePort() int {
 	if s.PortHTTP > 0 {
 		return s.PortHTTP
 	}
-	return s.PortSOCKS
+	if s.PortSOCKS > 0 {
+		return s.PortSOCKS
+	}
+	return s.Port
 }
 
 // effectiveProtocol returns the protocol string for credentials.
-func (s *ProxySummaryV2) effectiveProtocol() string {
+func (s *ProxySummary) effectiveProtocol() string {
 	switch s.Protocol {
 	case "default", "http":
 		return "http"
 	case "socks5":
 		return "socks5"
 	default:
-		return s.Protocol // vmess, vless, shadowsocks, trojan, wireguard
+		return s.Protocol // vmess, vless, shadowsocks, trojan
 	}
+}
+
+// effectiveHost returns the host for credential building.
+func (s *ProxySummary) effectiveHost() string {
+	if s.Host != "" {
+		return s.Host
+	}
+	return s.OutboundIP
 }
 
 // ProxyGroup is one region/group returned by GET /api/v1/groups.
 type ProxyGroup struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	ParentID *string `json:"parent_id"` // nil for top-level regions
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Description  string  `json:"description"`
+	TotalIPs     int     `json:"total_ips"`
+	AvailableIPs int     `json:"available_ips"`
+	NodeCount    int     `json:"node_count"`
+	ProxyCount   int     `json:"proxy_count"`
+	ParentID     *string `json:"parent_id"` // nil for top-level regions
 }
 
-// ─── API v1 Types (kept for backward compat with existing provider_order_ids) ──
-
-// CreateProxyRequest is the v1 request body for POST /api/v1/proxies (DEPRECATED).
-type CreateProxyRequest struct {
-	Protocol         string         `json:"protocol"`
-	IPRangeID        string         `json:"ip_range_id,omitempty"`
-	NodeID           string         `json:"node_id,omitempty"`
-	AuthUser         string         `json:"auth_user,omitempty"`
-	AuthPass         string         `json:"auth_pass,omitempty"`
-	BandwidthLimitMB int            `json:"bandwidth_limit_mb,omitempty"`
-	SpeedLimitMbps   int            `json:"speed_limit_mbps,omitempty"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
-}
-
-// ProxySummary is the v1 response object (DEPRECATED — kept for GetProxy fallback).
-type ProxySummary struct {
-	ID               string `json:"id"`
-	Host             string `json:"host"`
-	Port             int    `json:"port"`
-	Protocol         string `json:"protocol"`
-	Status           string `json:"status"`
-	AuthUser         string `json:"auth_user"`
-	AuthPass         string `json:"auth_pass"`
-	OutboundIP       string `json:"outbound_ip"`
-	NodeID           string `json:"node_id"`
-	NodeName         string `json:"node_name"`
-	BandwidthLimitMB int    `json:"bandwidth_limit_mb"`
-	SpeedLimitMbps   int    `json:"speed_limit_mbps"`
-	CreatedAt        string `json:"created_at"`
-	UpdatedAt        string `json:"updated_at"`
+// CheckResult is the response from GET /api/v1/proxies/:id/check.
+type CheckResult struct {
+	IP         string `json:"ip"`
+	Country    string `json:"country"`
+	City       string `json:"city"`
+	Org        string `json:"org"`
+	LatencyMs  int    `json:"latency_ms"`
+	CheckedVia string `json:"checked_via"`
 }
 
 // ─── Shared API envelope ──────────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 # VPM Provider Adapter — Design Document
 
 **Document ID**: PVP-DOC-022  
-**Version**: 2.0.0  
+**Version**: 3.0.0  
 **Component**: `proxy-service / providers / vpm`  
-**Last Updated**: 2026-03-24
+**Last Updated**: 2026-03-26
 
 ---
 
@@ -12,9 +12,9 @@
 **VPS Proxy Manager (VPM)** là internal service quản lý proxy trực tiếp trên các node vật lý. Cloudmini tích hợp VPM dưới dạng một provider adapter (`vpm`), implement `IProxyProvider` interface.
 
 - **Base URL**: `https://cz.resvn.net` (production)
-- **Authentication**: Query-param `?access_code=vpm_...` (v2 dùng access_code thay Bearer)
-- **API Docs**: `https://cz.resvn.net/billing-docs`
-- **Provider type**: **Sync** — credentials trả về ngay sau `POST /api/v2/ipv4`
+- **Authentication**: `X-API-Key` header (primary) + `?access_code=` query param (compat)
+- **API Docs**: `https://cz.resvn.net/billing-docs-v1`
+- **Provider type**: **Async** — `POST /api/v1/proxies` returns `status: "creating"`, adapter polls until `"running"`
 
 ---
 
@@ -22,8 +22,8 @@
 
 ```
 services/proxy-service/internal/providers/vpm/
-├── types.go        # DTOs: CreateProxyV2Request, ProxySummaryV2, ProtocolConfig, APIError
-├── client.go       # HTTP client: access_code auth, retry 3x, envelope unwrap, parseProxySummaries
+├── types.go        # DTOs: CreateProxyRequest, ProxySummary, CheckResult, APIError
+├── client.go       # HTTP client: X-API-Key auth, retry 3x, async polling, envelope unwrap
 ├── adapter.go      # IProxyProvider impl: Purchase/Cancel/Suspend/Resume/CheckStatus
 └── adapter_test.go # Unit tests
 ```
@@ -32,251 +32,172 @@ services/proxy-service/internal/providers/vpm/
 
 ## 3. Interface Implementation
 
-| Method | VPM API v2 Endpoint | Behavior |
+| Method | VPM API V1 Endpoint | Behavior |
 |---|---|---|
-| `Purchase` | `POST /api/v2/ipv4` hoặc `POST /api/v2/proxies` | Sync — credentials ngay lập tức |
-| `Cancel` | `DELETE /api/v2/ipv4/{id}` | Permanent — releases IP/port |
-| `Suspend` | `POST /api/v2/ipv4/{id}/suspend` | Temp pause (hoặc `PUT action=lock`) |
-| `Resume` | `POST /api/v2/ipv4/{id}/resume` | Restore (hoặc `PUT action=unlock`) |
-| `CheckStatus` | `GET /api/v2/ipv4/{id}` | Map status → Cloudmini constants |
+| `Purchase` | `POST /api/v1/proxies` | Async — polls until `running` (max 60s) |
+| `Cancel` | `DELETE /api/v1/proxies/{id}` | Permanent — 204 No Content |
+| `Suspend` | `POST /api/v1/proxies/{id}/stop` | Temporary — traffic disabled |
+| `Resume` | `POST /api/v1/proxies/{id}/start` | Restore traffic |
+| `CheckStatus` | `GET /api/v1/proxies/{id}` | Map status → Cloudmini constants |
 
 ---
 
-## 4. VPM API v2 Endpoints
+## 4. VPM API V1 Endpoints
 
-### 4.1 Create Proxy — Specific IP
-
-```http
-POST /api/v2/ipv4?access_code=<key>
-Content-Type: application/json
-
-{
-  "ipv4": "103.190.120.56",           // required: specific IP
-  "protocol": "default"               // "default"|"http"|"socks5"|"vmess"|"vless"|"shadowsocks"|"trojan"|"wireguard"
-}
-```
-
-**Response** (single object):
-```json
-{
-  "success": true,
-  "data": {
-    "id": "97b96318-f874-49ea-975d-e5e4d173bdca",
-    "ipv4": "103.190.120.56",
-    "username": "u_TroSFdkw",
-    "password": "Sv4yAqOrSGbOedUH",
-    "port_http": 47985,
-    "port_socks": 46859,
-    "protocol": "default",
-    "connection_string": "http://u_TroSFdkw:Sv4yAqOrSGbOedUH@103.190.120.56:47985",
-    "status": "completed"
-  },
-  "message": "default proxy created successfully"
-}
-```
-
-> **Note:** `protocol=default` → single object với cả `port_http` + `port_socks`. Code parse bằng `parseProxySummaries()` → adapter tạo **2 credentials** (HTTP + SOCKS5).
-
-### 4.2 Create Proxy — Region/Group Pool
+### 4.1 Create Proxy
 
 ```http
-POST /api/v2/proxies?access_code=<key>
+POST /api/v1/proxies
+X-API-Key: <key>
 Content-Type: application/json
 
 {
   "protocol": "default",
-  "group_id": "bf10f37c-7a2e-4912-84c6-6d7ee6acc7d7"
+  "group_id": "8fa2b3c4-...",     // optional: region UUID
+  "listen_ip": "103.151.53.41",   // optional: bind to specific IP
+  "ip_address_id": "...",         // optional: specific IP UUID
+  "ip_range_id": "...",           // optional: specific IP range
+  "bandwidth_limit_mb": 0,       // 0 = unlimited
+  "speed_limit_mbps": 0
 }
 ```
 
-**Response** (array):
+**Response** (201 Created):
 ```json
 {
   "success": true,
-  "data": [{
-    "id": "...",
-    "ipv4": "103.190.120.56",
-    "port_http": 47213,
-    "port_socks": 59220,
+  "data": {
+    "id": "550e8400-...",
+    "host": "103.151.53.41",
+    "port": 27642,
+    "port_http": 58668,
+    "port_socks": 27642,
     "protocol": "default",
-    ...
-  }],
-  "message": "1 proxy created successfully"
+    "outbound_ip": "103.151.53.41",
+    "auth_user": "u_abc12345",
+    "auth_pass": "SomePass16chars",
+    "status": "creating",
+    "connect_url": "socks5://u_abc12345:pass@103.151.53.41:27642"
+  }
 }
 ```
 
-> **Note:** Response format có thể là array hoặc single object tuỳ endpoint. `parseProxySummaries()` tự detect `raw[0] == '['` để handle cả 2.
+> **Note**: Status starts as `"creating"`. Poll `GET /api/v1/proxies/:id` until `"running"`.
 
-### 4.3 Get Proxy
+### 4.2 Supported Protocols
+
+| Protocol | port_http | port_socks | Credentials |
+|---|---|---|---|
+| `default` | ✅ | ✅ | 2 credentials (HTTP + SOCKS5) |
+| `http` | ✅ | ❌ | 1 credential |
+| `socks5` | ❌ | ✅ | 1 credential |
+| `vmess` | — | — | `connect_url` |
+| `vless` | — | — | `connect_url` |
+| `shadowsocks` | — | — | `connect_url`, `ss_method` |
+| `trojan` | — | — | `connect_url` |
+
+### 4.3 Get Proxy Detail
 
 ```http
-GET /api/v2/ipv4/{id}?access_code=<key>
-GET /api/v2/ipv4/{ipv4}?access_code=<key>   # cũng hoạt động bằng IP trực tiếp
+GET /api/v1/proxies/{id}
+X-API-Key: <key>
 ```
 
 ### 4.4 Delete Proxy
 
 ```http
-DELETE /api/v2/ipv4/{id}?access_code=<key>
-DELETE /api/v2/ipv4/{ipv4}?access_code=<key>  # IP trực tiếp
-Response: 204 No Content
+DELETE /api/v1/proxies/{id}
+X-API-Key: <key>
 ```
+Response: `204 No Content`
 
-> 404 NOT_FOUND được treat là success (idempotent).
-
-### 4.5 Lock / Unlock Proxy
+### 4.5 Stop Proxy
 
 ```http
-PUT /api/v2/ipv4/{ipv4}?access_code=<key>
-Content-Type: application/json
-
-{"action": "lock"}    # hoặc "unlock"
+POST /api/v1/proxies/{id}/stop
+X-API-Key: <key>
 ```
+Response: `{"success": true, "data": "proxy stopped"}`
 
-### 4.6 Stop / Start Proxy
+### 4.6 Start Proxy
 
 ```http
-POST /api/v2/ipv4/{id}/stop?access_code=<key>
-POST /api/v2/ipv4/{id}/start?access_code=<key>
+POST /api/v1/proxies/{id}/start
+X-API-Key: <key>
 ```
+Response: `{"success": true, "data": "proxy started"}`
 
-### 4.7 List Groups/Regions
+### 4.7 Check Proxy IP
 
 ```http
-GET /api/v1/groups?access_code=<key>
+GET /api/v1/proxies/{id}/check
+X-API-Key: <key>
 ```
-
----
-
-## 5. Protocol Behavior
-
-| Protocol | port_http | port_socks | Credentials tạo ra |
-|---|---|---|---|
-| `default` | ✅ | ✅ | **2 credentials**: HTTP + SOCKS5 |
-| `http` | ✅ | null | 1 credential: HTTP only |
-| `socks5` | null | ✅ | 1 credential: SOCKS5 only |
-| `vmess` / `vless` / `shadowsocks` / `trojan` / `wireguard` | — | — | 1 credential dùng `connection_string` |
-
----
-
-## 6. Response Format Migration
-
-VPM đang migrate response format:
-
-| Endpoint | Old format | New format |
-|---|---|---|
-| `POST /api/v2/ipv4` | `data: [...]` array | `data: {...}` single object ✅ |
-| `POST /api/v2/proxies` | `data: [...]` array | `data: [...]` array (giữ nguyên) |
-
-Code dùng `parseProxySummaries(raw json.RawMessage)` detect tự động:
-```go
-if raw[0] == '[' {
-    // parse array
-} else {
-    // parse single object → wrap thành []ProxySummaryV2{single}
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "ip": "103.151.53.41",
+    "country": "VN",
+    "city": "Ho Chi Minh City",
+    "org": "AS135918 VIET DIGITAL...",
+    "latency_ms": 361
+  }
 }
 ```
 
----
+### 4.8 List Groups
 
-## 7. PurchaseRequest Metadata Keys
-
-| Key | Mô tả | Default |
-|---|---|---|
-| `ipv4` | Specific IP để tạo proxy | VPM auto-select từ pool |
-| `group_id` | VPM region/group UUID | VPM auto-select |
-| `protocol` | Protocol override: `"default"`, `"http"`, `"socks5"`, ... | `"default"` |
-| `bandwidth_limit_mb` | Giới hạn bandwidth (MB), 0 = unlimited | 0 |
-| `speed_limit_mbps` | Giới hạn tốc độ (Mbps) | 0 |
-
-**Priority:**  
-`metadata["protocol"]` > `product.Protocol` > `"default"`
-
----
-
-## 8. Configuration
-
-```env
-VPM_BASE_URL=https://cz.resvn.net
-VPM_API_KEY=vpm_xxxxxxxxxxxxx
+```http
+GET /api/v1/groups
+X-API-Key: <key>
 ```
 
-```sql
-INSERT INTO proxy.providers (id, name, display_name, adapter_type, config, is_active, priority)
-VALUES (
-    'b2000000-0000-0000-0000-000000000002',
-    'vpm', 'VPS Proxy Manager', 'vpm',
-    '{"base_url":"https://cz.resvn.net","api_key":""}',
-    true, 10
-);
+---
+
+## 5. Status Mapping
+
+| VPM Status | Cloudmini Status | Notes |
+|---|---|---|
+| `running` | `active` | Normal operation |
+| `stopped` | `active` | Proxy reserved, temporarily paused |
+| `creating` | `processing` | Async creation in progress |
+| `error` | `failed` | Provisioning failed |
+
+---
+
+## 6. Async Purchase Flow
+
+```
+Frontend → POST /proxy/orders → OrderUsecase.CreateOrder()
+  → adapter.Purchase()
+    → client.CreateProxyAndWait()
+      → POST /api/v1/proxies → status: "creating"
+      → poll GET /api/v1/proxies/:id every 2s (max 60s)
+      → status: "running" → return ProxySummary
+    → buildCredentials() → return PurchaseResult
+  → encrypt credentials → update order → active
 ```
 
-> ⚠️ Registry key là **UUID** của provider trong DB — `order_usecase` lookup theo `product.ProviderID.String()`.
-
 ---
 
-## 9. Error Handling
+## 7. Error Codes
 
-| HTTP Status / Code | Cloudmini Error | Ý nghĩa |
-|---|---|---|
-| 401, 403 | `ErrProviderUnavailable` | access_code sai |
-| 400 `INVALID_INPUT` | `ErrInvalidConfig` | IP không available, protocol không hợp lệ |
-| 404 `NOT_FOUND` | idempotent success (Cancel) / `ErrProviderUnavailable` (others) | Proxy không tồn tại |
-| 5xx | retry 3x → `ErrProviderUnavailable` | VPM server lỗi |
-
----
-
-## 10. Status Mapping
-
-| VPM status | Cloudmini status |
+| VPM Error Code | Meaning |
 |---|---|
-| `completed` | `active` |
-| `pending` | `processing` |
-| `suspended` | `suspended` |
-| `stopped` | `active` (port giữ nguyên) |
-| `error` | `failed` |
-| _(other)_ | `processing` |
+| `INVALID_INPUT` | Bad request parameters |
+| `NO_AVAILABLE_IP` | No free IPs in group |
+| `NODE_AT_CAPACITY` | Node full |
+| `PROXY_NOT_FOUND` | ID doesn't exist |
+| `INTERNAL_ERROR` | VPM internal failure |
 
 ---
 
-## 11. Sync vs Async Comparison
+## 8. Changelog
 
-| | VPM | Proxy-Cheap |
+| Date | Version | Changes |
 |---|---|---|
-| **Credential delivery** | Sync (ngay lập tức) | Async (qua webhook) |
-| **Order status after Purchase** | `active` | `processing` |
-| **Cancel** | DELETE `/api/v2/ipv4/{id}` | No-op |
-| **Webhook needed** | ❌ Không | ✅ Có |
-
----
-
-## 12. UI Protocol Selector
-
-Frontend (`OrderPanel`) hiển thị 3 nút protocol:
-- **⚡ Default** — HTTP + SOCKS5 dual port (`protocol=default`)
-- **🌐 HTTP** — HTTP only
-- **🔌 SOCKS5** — SOCKS5 only
-
-Mặc định là `default`. Protocol được gửi trong `metadata.protocol` → override `product.Protocol`.
-
----
-
-## 13. Testing
-
-```bash
-# Build verification
-go build ./...
-
-# Manual: create proxy với specific IP
-curl -s -X POST "https://cz.resvn.net/api/v2/ipv4?access_code=$VPM_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"ipv4": "103.190.120.56", "protocol": "default"}'
-
-# Manual: lock/unlock by IP
-curl -s -X PUT "https://cz.resvn.net/api/v2/ipv4/103.190.120.56?access_code=$VPM_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"action": "lock"}'
-
-# Manual: delete by IP
-curl -s -X DELETE "https://cz.resvn.net/api/v2/ipv4/103.190.120.56?access_code=$VPM_API_KEY"
-```
+| 2026-03-26 | 3.0.0 | **Migrate to Billing API V1**: async creation flow, X-API-Key auth, field renames (auth_user/auth_pass/host), stop/start replaces lock/unlock, added CheckProxy, removed pipe-separated IDs |
+| 2026-03-24 | 2.0.0 | Migrate to API v2, dual-port default protocol, lock/unlock by IP |
+| 2026-03-22 | 1.0.0 | Initial VPM adapter (API v1 legacy) |
