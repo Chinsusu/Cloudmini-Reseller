@@ -985,3 +985,60 @@ html, body {
   .dc-card-top { padding: 1.5rem 1.25rem 1.25rem; }
   .dc-card-bottom { padding: 1rem 1.25rem 1.25rem; }
 }
+
+/* ─── Pagination ──────────────────────────────────────────────────────────── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-light);
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.pagination-info {
+  font-size: .85rem;
+  color: var(--text-muted);
+}
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+.pg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 .5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dark);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+}
+.pg-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.pg-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  background: var(--bg);
+}
+.pg-active {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+.pg-ellipsis {
+  padding: 0 .4rem;
+  color: var(--text-muted);
+  user-select: none;
+}

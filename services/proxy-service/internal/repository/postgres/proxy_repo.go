@@ -120,8 +120,8 @@ func (r *OrderRepository) UpdateAfterPurchase(ctx context.Context, id uuid.UUID,
 
 func (r *OrderRepository) ListByUser(ctx context.Context, userID uuid.UUID, offset, limit int) ([]*domain.Order, int, error) {
 	var total int
-	// Exclude 'failed' orders — they are logged in order_events but not shown to users
-	const excludeFailed = ` WHERE user_id=$1 AND status != 'failed'`
+	// Exclude 'failed' and 'cancelled' orders
+	const excludeFailed = ` WHERE user_id=$1 AND status NOT IN ('failed', 'cancelled')`
 	if err := r.db.GetContext(ctx, &total,
 		`SELECT COUNT(*) FROM proxy.orders`+excludeFailed, userID,
 	); err != nil {
