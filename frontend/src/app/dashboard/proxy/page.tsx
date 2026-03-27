@@ -589,6 +589,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
     onUnlock?: (id: string, num: string) => void
     onRefresh: () => void
     limit: number; onLimitChange: (n: number) => void
+    pagination?: React.ReactNode
 }) {
     const [revealed, setRevealed] = useState<Record<string, any>>({})
     const [editOrder, setEditOrder] = useState<any>(null)
@@ -842,6 +843,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
                         </tbody>
                     </table>
                 </div>
+                {pagination}
             </div>
         </>
     )
@@ -975,13 +977,24 @@ export default function ProxyOrdersPage() {
                     </div>
                 ) : (
                     <>
-                        <OrdersTable orders={orders} onCancel={handleCancel} onRenew={handleRenew} onLock={handleLockOrder} onUnlock={handleUnlockOrder} onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} limit={limit} onLimitChange={l => { setLimit(l); setPage(1) }} />
-                        <Pagination
-                            page={page}
-                            totalPages={meta.total_pages ?? 1}
-                            total={meta.total ?? orders.length}
-                            limit={limit === 9999 ? (meta.total ?? orders.length) : limit}
-                            onPageChange={p => setPage(p)}
+                        <OrdersTable 
+                            orders={orders} 
+                            onCancel={handleCancel} 
+                            onRenew={handleRenew} 
+                            onLock={handleLockOrder} 
+                            onUnlock={handleUnlockOrder} 
+                            onRefresh={() => qc.invalidateQueries({ queryKey: ['proxy-orders'] })} 
+                            limit={limit} 
+                            onLimitChange={l => { setLimit(l); setPage(1) }}
+                            pagination={
+                                <Pagination
+                                    page={page}
+                                    totalPages={meta.total_pages ?? 1}
+                                    total={meta.total ?? orders.length}
+                                    limit={limit === 9999 ? (meta.total ?? orders.length) : limit}
+                                    onPageChange={p => setPage(p)}
+                                />
+                            }
                         />
                     </>
                 )}
