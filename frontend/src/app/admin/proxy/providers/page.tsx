@@ -13,6 +13,7 @@ import {
 // Adapter type → human-readable label + color
 const ADAPTER_META: Record<string, { label: string; color: string }> = {
     'vpm':          { label: 'VPM',         color: '#E6A817' },
+    'cpm':          { label: 'CPM IPv4-Res',color: '#17A2B8' },
     'proxy_cheap':  { label: 'Proxy-Cheap', color: '#7367F0' },
     'sandbox':      { label: 'Sandbox',     color: '#28C76F' },
 }
@@ -42,7 +43,7 @@ function ProviderModal({ provider, onClose, onSaved }: {
         setSaving(true)
         try {
             const config: Record<string, string> = {}
-            if (adapterType === 'vpm') {
+            if (adapterType === 'vpm' || adapterType === 'cpm') {
                 if (baseUrl.trim()) config.base_url = baseUrl.trim()
                 if (apiKey.trim()) config.api_key = apiKey.trim()
             }
@@ -103,6 +104,7 @@ function ProviderModal({ provider, onClose, onSaved }: {
                             <label style={labelStyle}>Adapter Type</label>
                             <select value={adapterType} onChange={e => setAdapterType(e.target.value)} style={inputStyle}>
                                 <option value="vpm">VPM</option>
+                                <option value="cpm">CPM IPv4-Res</option>
                                 <option value="proxy_cheap">Proxy-Cheap</option>
                                 <option value="sandbox">Sandbox</option>
                             </select>
@@ -114,7 +116,7 @@ function ProviderModal({ provider, onClose, onSaved }: {
                         </div>
                     </div>
 
-                    {adapterType === 'vpm' && (
+                    {(adapterType === 'vpm' || adapterType === 'cpm') && (
                         <>
                             <div>
                                 <label style={labelStyle}>Base URL</label>
