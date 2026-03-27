@@ -415,6 +415,9 @@ func (h *Handler) AdminUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		apierror.Respond(w, r, http.StatusBadRequest, apierror.CodeValidationError, "invalid JSON")
 		return
 	}
+	if len(req.Config) == 0 || string(req.Config) == "null" {
+		req.Config = json.RawMessage(`{}`)
+	}
 
 	provider := &domain.Provider{
 		ID:          providerID,
