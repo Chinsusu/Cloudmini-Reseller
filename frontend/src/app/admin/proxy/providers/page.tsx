@@ -12,8 +12,8 @@ import {
 
 // Adapter type → human-readable label + color
 const ADAPTER_META: Record<string, { label: string; color: string }> = {
-    'vpm':          { label: 'VPM',         color: '#E6A817' },
-    'cpm':          { label: 'CPM IPv4-Res',color: '#17A2B8' },
+    'vpm':          { label: 'VPM IPv4-DC', color: '#E6A817' },
+    'cpm':          { label: 'VPM IPv4-Res',color: '#17A2B8' },
     'proxy_cheap':  { label: 'Proxy-Cheap', color: '#7367F0' },
     'sandbox':      { label: 'Sandbox',     color: '#28C76F' },
 }
@@ -103,8 +103,8 @@ function ProviderModal({ provider, onClose, onSaved }: {
                         <div>
                             <label style={labelStyle}>Adapter Type</label>
                             <select value={adapterType} onChange={e => setAdapterType(e.target.value)} style={inputStyle}>
-                                <option value="vpm">VPM</option>
-                                <option value="cpm">CPM IPv4-Res</option>
+                                <option value="vpm">VPM IPv4-DC</option>
+                                <option value="cpm">VPM IPv4-Res</option>
                                 <option value="proxy_cheap">Proxy-Cheap</option>
                                 <option value="sandbox">Sandbox</option>
                             </select>
