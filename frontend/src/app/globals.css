@@ -8,21 +8,46 @@
 }
 
 :root {
-  /* ── User Requested Theme Variables ── */
-  --card-gap: 1.25rem;
-  --card-padding: 2rem;
+  /* ── Authentic Hetzner Variables ── */
+  --color-primary: #d50c2d;
+  --color-primary--link: #d50c2d;
+  --color-primary--hover: rgb(241.976, 23.824, 59.64);
+  --color-primary--disabled: hsl(350, 89%, 74%);
+  --color-primary--disabled-text: #fff;
+  --color-green--light: hsl(143, 76%, 67%);
+  --color-green--background: hsl(143, 76%, 97%);
+  --color-red-full--background: hsl(0, 100%, 95%);
+  --color-red-full--text: hsl(0, 100%, 40%);
+  --color-text: hsl(0, 0%, 22%);
+  --color-text--disabled: hsl(0, 0%, 54%);
   --color-back-link--hover: hsl(0, 0%, 42%);
   --color-background--layer-0: hsl(0, 0%, 96%);
   --color-background--layer-10: #fff;
+  --color-background--gradient-card-0: rgba(255, 255, 255, 0);
+  --color-background--gradient-card-15: rgba(255, 255, 255, .8);
+  --color-background--overlay: rgba(0, 0, 0, .5);
   --color-background-empty-state: hsl(0, 0%, 91%);
+  --color-card-background: #fff;
+  --color-card-background--hover: hsl(0, 0%, 98%);
+  --color-nav-primary-background--hover: hsl(0, 0%, 98%);
+  --color-nav-primary--icon: hsl(0, 0%, 27%);
+  --color-dropdown-background--hover: hsl(0, 0%, 98%);
+  --color-dropdown-label-background: hsl(0, 0%, 91%);
   --color-border: hsl(0, 0%, 91%);
   --color-border--dark: hsl(0, 0%, 86%);
-  --color-card-background: #fff;
-  --color-primary: #d50c2d;
-  --color-primary--hover: rgb(241.976, 23.824, 59.64);
-  --color-text: hsl(0, 0%, 22%);
-  --color-text--disabled: hsl(0, 0%, 54%);
-  --color-status-indicator--green: hsl(143, 76%, 67%);
+  --color-button-secondary-background: hsl(0, 0%, 86%);
+  --color-button-secondary-background--hover: hsl(0, 0%, 91%);
+  --color-table-background--head: hsl(0, 0%, 96%);
+  --color-badge--grey: hsl(0, 0%, 91%);
+  --color-status-badge-grey--background: hsl(0, 0%, 96%);
+  --color-status-badge-grey--color: hsl(0, 0%, 54%);
+  --color-status-badge-red--background: hsl(0, 100%, 98%);
+  --color-status-badge-red--color: hsl(0, 100%, 50%);
+  --color-status-badge-green--background: hsl(143, 76%, 97%);
+  --color-shadow: rgba(0, 0, 0, .15);
+  --color-shadow--hover: rgba(0, 0, 0, .1);
+  --color-ui-message-background: hsl(0, 0%, 54%);
+  --color-project-list-background--default: #434a62;
   --color-project-list-background--colored: #1f2433;
 
   /* ── Core accent mapped to Theme Red ──────────────────── */
@@ -88,20 +113,36 @@
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
-html, body {
-  background-color: var(--bg);
-  box-sizing: border-box;
-  color: var(--text);
-  color-scheme: light;
+body {
+  --gap-outer: 25px;
+  --gap-between: 1.25rem;
+  --gap-groups: 1rem;
+  --modal-padding: 2rem;
+  --modal-gap: 1.25rem;
+  --card-gap: 1.25rem;
+  --card-padding: 2rem;
+  
   font-family: 'Inter', sans-serif;
-  letter-spacing: -0.24px;
-  line-height: 24px;
-  margin: 0px;
+  -webkit-text-rendering: optimizeLegibility;
+  -moz-text-rendering: optimizeLegibility;
+  -ms-text-rendering: optimizeLegibility;
+  -o-text-rendering: optimizeLegibility;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -moz-font-smoothing: antialiased;
+  -ms-font-smoothing: antialiased;
+  -o-font-smoothing: antialiased;
+  font-smoothing: antialiased;
+  letter-spacing: -.015rem;
+
+  margin: 0;
   min-height: 100%;
   position: relative;
-  text-rendering: optimizelegibility;
-  -webkit-font-smoothing: antialiased;
+  background-color: var(--color-background--layer-0);
+  color: var(--color-text);
 }
+html { line-height: 1.5; }
 
 /* ─── Layout ──────────────────────────────────────────────────────────────── */
 .page-layout  { display: flex; min-height: 100vh; }
