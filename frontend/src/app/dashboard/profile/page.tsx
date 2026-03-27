@@ -314,7 +314,7 @@ export default function ProfilePage() {
                         </div>
                         <div style={{
                             display: 'flex', alignItems: 'center', gap: '1rem', padding: '.875rem',
-                            background: twoFAEnabled ? 'rgba(40,199,111,.06)' : 'rgba(255,255,255,.03)',
+                            background: twoFAEnabled ? 'rgba(40,199,111,.06)' : 'var(--surface-raised)',
                             borderRadius: 10,
                             border: `1px solid ${twoFAEnabled ? 'rgba(40,199,111,.2)' : 'var(--border)'}`,
                             marginBottom: '1rem',

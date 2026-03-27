@@ -88,7 +88,7 @@ export default function DashboardPage() {
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: ANNOUNCEMENTS.length > 0 ? '1rem' : 0 }}>
                     <div>
-                        <p style={{ color: 'rgba(255,255,255,.45)', fontSize: '.82rem', marginBottom: '.25rem' }}>
+                        <p style={{ color: 'var(--border)', fontSize: '.82rem', marginBottom: '.25rem' }}>
                             {greeting}, <span style={{ color: 'var(--dc-gold)', fontWeight: 600 }}>{firstName}</span>
                         </p>
                         <h1 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff' }}>
@@ -118,13 +118,13 @@ export default function DashboardPage() {
                                     borderRadius: '6px', padding: '.65rem .9rem',
                                 }}>
                                     <Icon size={15} color={COLOR_MAP[a.type]} style={{ flexShrink: 0, marginTop: '.1rem' }} />
-                                    <p style={{ fontSize: '.85rem', color: 'rgba(255,255,255,.8)', lineHeight: 1.5 }}>{a.msg}</p>
+                                    <p style={{ fontSize: '.85rem', color: 'var(--border)', lineHeight: 1.5 }}>{a.msg}</p>
                                 </div>
                             )
                         })}
                     </div>
                 ) : (
-                    <p style={{ fontSize: '.82rem', color: 'rgba(255,255,255,.32)', marginTop: '.5rem' }}>
+                    <p style={{ fontSize: '.82rem', color: 'var(--border)', marginTop: '.5rem' }}>
                         No active notices at this time. We'll notify you here about maintenance, outages, or important updates.
                     </p>
                 )}

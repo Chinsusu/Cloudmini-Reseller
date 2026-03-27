@@ -89,14 +89,14 @@ function ProductCard({ product, selected, onClick }: { product: any; selected: b
                     <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '.2rem',
                         padding: '.15rem .5rem', borderRadius: '100px', fontSize: '.7rem',
-                        background: 'rgba(255,255,255,.06)', color: 'var(--text)',
+                        background: 'var(--surface-raised)', color: 'var(--text)',
                     }}>📍 {product.location}</span>
                 )}
                 {product.protocol && (
                     <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: '.2rem',
                         padding: '.15rem .5rem', borderRadius: '100px', fontSize: '.7rem',
-                        background: 'rgba(255,255,255,.06)', color: 'var(--text)',
+                        background: 'var(--surface-raised)', color: 'var(--text)',
                     }}>🔌 {product.protocol.toUpperCase()}</span>
                 )}
                 {isRotating && (
@@ -293,7 +293,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                     <input type="number" min={1} max={100} value={qty} onChange={e => setQty(Math.max(1, +e.target.value))}
                         style={{
                             width: '100%', padding: '.5rem .65rem',
-                            background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                            background: 'var(--surface-raised)', border: '1px solid var(--border)',
                             borderRadius: 'var(--radius)', color: 'var(--text-heading)',
                             fontSize: '.88rem',
                         }} />
@@ -304,7 +304,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                         <select value={periodMonths} onChange={e => setPeriodMonths(+e.target.value)}
                             style={{
                                 width: '100%', padding: '.5rem .65rem',
-                                background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                                background: 'var(--surface-raised)', border: '1px solid var(--border)',
                                 borderRadius: 'var(--radius)', color: 'var(--text-heading)',
                                 fontSize: '.88rem',
                             }}>
@@ -319,7 +319,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                             <select value={country} onChange={e => { setCountry(e.target.value); setIspId('') }}
                                 style={{
                                     width: '100%', padding: '.5rem .65rem',
-                                    background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                                    background: 'var(--surface-raised)', border: '1px solid var(--border)',
                                     borderRadius: 'var(--radius)', color: 'var(--text-heading)',
                                     fontSize: '.88rem',
                                 }}>
@@ -335,7 +335,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                         <select value={ispId} onChange={e => setIspId(e.target.value)}
                             style={{
                                 width: '100%', padding: '.5rem .65rem',
-                                background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                                background: 'var(--surface-raised)', border: '1px solid var(--border)',
                                 borderRadius: 'var(--radius)', color: 'var(--text-heading)',
                                 fontSize: '.88rem',
                             }}>

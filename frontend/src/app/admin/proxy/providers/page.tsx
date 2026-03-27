@@ -156,7 +156,7 @@ const labelStyle: React.CSSProperties = {
 }
 const inputStyle: React.CSSProperties = {
     width: '100%', padding: '.5rem .65rem',
-    background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+    background: 'var(--surface-raised)', border: '1px solid var(--border)',
     borderRadius: 'var(--radius)', color: 'var(--text-heading)', fontSize: '.88rem',
 }
 const btnStyle: React.CSSProperties = {

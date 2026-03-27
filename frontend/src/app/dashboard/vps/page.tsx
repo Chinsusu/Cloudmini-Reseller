@@ -38,7 +38,7 @@ function TabBtn({ label, active, onClick, count }: { label: string; active: bool
             {count !== undefined && (
                 <span style={{
                     padding: '.1rem .5rem', borderRadius: '100px',
-                    background: active ? 'rgba(230,168,23,.15)' : 'rgba(255,255,255,.08)',
+                    background: active ? 'rgba(230,168,23,.15)' : 'var(--surface-raised)',
                     color: active ? 'var(--dc-gold)' : 'var(--text-muted)',
                     fontSize: '.72rem', fontWeight: 700,
                 }}>{count}</span>

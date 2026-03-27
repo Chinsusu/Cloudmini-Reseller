@@ -99,17 +99,17 @@ function ProductCard({ product, selected, onClick }: { product: any; selected: b
             {/* Feature pills */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.3rem' }}>
                 {product.location && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'var(--surface-raised)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
                         <Globe size={10} /> {product.location}
                     </span>
                 )}
                 {product.duration_days && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'var(--surface-raised)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
                         <Clock size={10} /> {product.duration_days} ngày
                     </span>
                 )}
                 {product.bandwidth_gb && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.06)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'var(--surface-raised)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
                         <Database size={10} /> {product.bandwidth_gb} GB
                     </span>
                 )}
@@ -119,7 +119,7 @@ function ProductCard({ product, selected, onClick }: { product: any; selected: b
                     </span>
                 )}
                 {!product.duration_days && !product.bandwidth_gb && !isRotating && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'rgba(255,255,255,.04)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.75rem', fontWeight: 500, color: 'var(--text-muted)', background: 'var(--surface-raised)', border: '1px solid var(--border-light)', padding: '.2rem .55rem', borderRadius: 'var(--radius-pill)' }}>
                         <Zap size={10} /> Pay per GB
                     </span>
                 )}
@@ -252,7 +252,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                     </span>
                 </div>
                 <button onClick={onClose} style={{
-                    background: 'rgba(255,255,255,.06)', border: '1px solid var(--border)',
+                    background: 'var(--surface-raised)', border: '1px solid var(--border)',
                     borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer',
                     padding: '.3rem .65rem', display: 'flex', alignItems: 'center', gap: '.3rem',
                     fontSize: '.78rem', fontWeight: 600, transition: 'color .12s',
@@ -327,12 +327,12 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                         <label>Quantity {isRotating ? '(GB)' : '(proxies)'}</label>
                         <div style={{ display: 'flex', gap: '.4rem' }}>
                             <button onClick={() => setQty(q => Math.max(1, q - 1))}
-                                style={{ width: 34, height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'rgba(255,255,255,.04)', color: 'var(--text-heading)', cursor: 'pointer', fontWeight: 700 }}>−</button>
+                                style={{ width: 34, height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface-raised)', color: 'var(--text-heading)', cursor: 'pointer', fontWeight: 700 }}>−</button>
                             <input className="input" type="number" min={1} value={qty}
                                 onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
                                 style={{ textAlign: 'center' }} />
                             <button onClick={() => setQty(q => q + 1)}
-                                style={{ width: 34, height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'rgba(255,255,255,.04)', color: 'var(--text-heading)', cursor: 'pointer', fontWeight: 700 }}>+</button>
+                                style={{ width: 34, height: 38, border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--surface-raised)', color: 'var(--text-heading)', cursor: 'pointer', fontWeight: 700 }}>+</button>
                         </div>
                     </div>
                 </div>
@@ -350,7 +350,7 @@ function OrderPanel({ product, onClose, onSuccess }: { product: any; onClose: ()
                                 padding: '.45rem .9rem',
                                 border: `1px solid ${protocol === opt.value ? 'var(--dc-gold)' : 'var(--border)'}`,
                                 borderRadius: 'var(--radius)',
-                                background: protocol === opt.value ? 'rgba(230,168,23,.12)' : 'rgba(255,255,255,.03)',
+                                background: protocol === opt.value ? 'rgba(230,168,23,.12)' : 'var(--surface-raised)',
                                 color: protocol === opt.value ? 'var(--dc-gold)' : 'var(--text-muted)',
                                 cursor: 'pointer',
                                 fontSize: '.82rem',
@@ -640,7 +640,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
             onClick={() => handleCopy(value)}
             style={{
                 display: 'inline-block', cursor: 'pointer',
-                fontSize: '.76rem', background: 'rgba(255,255,255,.06)',
+                fontSize: '.76rem', background: 'var(--surface-raised)',
                 padding: '.1rem .4rem', borderRadius: 3,
                 color: 'var(--text-heading)', fontFamily: 'monospace',
                 border: '1px solid transparent', transition: 'border-color .12s',
@@ -723,7 +723,7 @@ function OrdersTable({ orders, onCancel, onRenew, onLock, onUnlock, onRefresh, l
                                 return (
                                     <tr key={o.id} style={{ opacity: isFailed ? .6 : 1 }}>
                                         <td>
-                                            <code style={{ fontSize: '.78rem', background: 'rgba(255,255,255,.06)', padding: '.15rem .45rem', borderRadius: 4, color: 'var(--text-heading)' }}>{o.order_number}</code>
+                                            <code style={{ fontSize: '.78rem', background: 'var(--surface-raised)', padding: '.15rem .45rem', borderRadius: 4, color: 'var(--text-heading)' }}>{o.order_number}</code>
                                             {o.admin_note && <div style={{ fontSize: '.72rem', color: 'var(--warning)', marginTop: 2 }}>📝 {o.admin_note}</div>}
                                         </td>
                                         <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
@@ -867,7 +867,7 @@ function TabBtn({ label, active, onClick, count }: { label: string; active: bool
             {count !== undefined && (
                 <span style={{
                     padding: '.1rem .5rem', borderRadius: '100px',
-                    background: active ? 'rgba(230,168,23,.15)' : 'rgba(255,255,255,.08)',
+                    background: active ? 'rgba(230,168,23,.15)' : 'var(--surface-raised)',
                     color: active ? 'var(--dc-gold)' : 'var(--text-muted)',
                     fontSize: '.72rem', fontWeight: 700,
                 }}>{count}</span>

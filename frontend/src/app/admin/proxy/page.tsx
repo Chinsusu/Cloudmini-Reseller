@@ -213,7 +213,7 @@ function AddProductModal({ onClose }: { onClose: () => void }) {
                                             <label key={g.id} style={{
                                                 display: 'flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer',
                                                 padding: '.35rem .65rem', borderRadius: 6, fontSize: '.82rem', fontWeight: 500,
-                                                background: selectedGroups.includes(g.id) ? 'var(--primary)' : 'rgba(255,255,255,.06)',
+                                                background: selectedGroups.includes(g.id) ? 'var(--primary)' : 'var(--surface-raised)',
                                                 color: selectedGroups.includes(g.id) ? '#fff' : 'var(--text)',
                                                 border: '1px solid ' + (selectedGroups.includes(g.id) ? 'var(--primary)' : 'var(--border)'),
                                                 transition: 'all .15s',
@@ -373,7 +373,7 @@ function EditProductModal({ product, providers, onClose }: { product: any, provi
                                             <label key={g.id} style={{
                                                 display: 'flex', alignItems: 'center', gap: '.35rem', cursor: 'pointer',
                                                 padding: '.35rem .65rem', borderRadius: 6, fontSize: '.82rem', fontWeight: 500,
-                                                background: selectedGroups.includes(g.id) ? 'var(--primary)' : 'rgba(255,255,255,.06)',
+                                                background: selectedGroups.includes(g.id) ? 'var(--primary)' : 'var(--surface-raised)',
                                                 color: selectedGroups.includes(g.id) ? '#fff' : 'var(--text)',
                                                 border: '1px solid ' + (selectedGroups.includes(g.id) ? 'var(--primary)' : 'var(--border)'),
                                                 transition: 'all .15s',
