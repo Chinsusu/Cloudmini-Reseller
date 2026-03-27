@@ -19,6 +19,7 @@ import (
 	"github.com/pvp/proxy-service/internal/events"
 	httphandler "github.com/pvp/proxy-service/internal/handler/http"
 	"github.com/pvp/proxy-service/internal/providers"
+	"github.com/pvp/proxy-service/internal/providers/cpm"
 	proxycheap "github.com/pvp/proxy-service/internal/providers/proxy_cheap"
 	"github.com/pvp/proxy-service/internal/providers/vpm"
 	repopg "github.com/pvp/proxy-service/internal/repository/postgres"
@@ -42,6 +43,10 @@ func main() {
 	// VPS Proxy Manager credentials (optional)
 	vpmBaseURL := getEnv("VPM_BASE_URL", "")
 	vpmAPIKey  := getEnv("VPM_API_KEY", "")
+
+	// CPM (IPv4-Res) credentials (optional)
+	cpmBaseURL := getEnv("CPM_BASE_URL", "https://cz.resvn.net")
+	cpmAPIKey  := getEnv("CPM_API_KEY", "")
 
 	log := logger.New(logLevel)
 
@@ -132,6 +137,44 @@ func main() {
 		log.Info("vpm adapter registered (env fallback)", slog.String("base_url", vpmBaseURL))
 	} else {
 		log.Warn("no VPM providers configured")
+	}
+
+	// CPM adapters — load all active CPM providers from DB.
+	// Each provider row with adapter_type='cpm' gets its own adapter instance.
+	cpmProviders, err := providerRepo.ListByAdapterType(context.Background(), "cpm")
+	if err != nil {
+		log.Error("failed to load CPM providers from DB", slog.String("error", err.Error()))
+	}
+	if len(cpmProviders) > 0 {
+		for _, p := range cpmProviders {
+			var cfg cpm.Config
+			if jsonErr := json.Unmarshal(p.Config, &cfg); jsonErr != nil {
+				log.Error("invalid CPM provider config", slog.String("provider_id", p.ID.String()), slog.String("error", jsonErr.Error()))
+				continue
+			}
+			if cfg.BaseURL == "" {
+				log.Warn("CPM provider has empty base_url, skipping", slog.String("provider_id", p.ID.String()))
+				continue
+			}
+			adapter := cpm.NewAdapter(cfg)
+			registry.Register(p.ID.String(), adapter)
+			log.Info("cpm adapter registered",
+				slog.String("provider_id", p.ID.String()),
+				slog.String("name", p.Name),
+				slog.String("display_name", p.DisplayName),
+				slog.String("base_url", cfg.BaseURL),
+			)
+		}
+	} else if cpmBaseURL != "" && cpmAPIKey != "" {
+		// Fallback: register from env vars
+		cpmAdapter := cpm.NewAdapter(cpm.Config{
+			BaseURL: cpmBaseURL,
+			APIKey:  cpmAPIKey,
+		})
+		registry.Register("b3000000-0000-0000-0000-000000000003", cpmAdapter)
+		log.Info("cpm adapter registered (env fallback)", slog.String("base_url", cpmBaseURL))
+	} else {
+		log.Warn("no CPM providers configured")
 	}
 
 
