@@ -218,8 +218,8 @@ func (r *ProductRepository) AdminList(ctx context.Context, offset, limit int) ([
 
 func (r *ProductRepository) Create(ctx context.Context, p *domain.Product) error {
 	q := `INSERT INTO proxy.products
-		(id,provider_id,name,proxy_type,protocol,location,duration_days,bandwidth_gb,base_cost,is_active,created_at)
-		VALUES (:id,:provider_id,:name,:proxy_type,:protocol,:location,:duration_days,:bandwidth_gb,:base_cost,:is_active,NOW())`
+		(id,provider_ids,name,proxy_type,protocol,location,duration_days,bandwidth_gb,base_cost,is_active,created_at)
+		VALUES (:id,:provider_ids,:name,:proxy_type,:protocol,:location,:duration_days,:bandwidth_gb,:base_cost,:is_active,NOW())`
 	if _, err := r.db.NamedExecContext(ctx, q, p); err != nil {
 		return fmt.Errorf("ProductRepository.Create: %w", err)
 	}
@@ -229,7 +229,8 @@ func (r *ProductRepository) Create(ctx context.Context, p *domain.Product) error
 func (r *ProductRepository) Update(ctx context.Context, p *domain.Product) error {
 	q := `UPDATE proxy.products SET
 		name=:name, proxy_type=:proxy_type, protocol=:protocol, location=:location,
-		duration_days=:duration_days, bandwidth_gb=:bandwidth_gb, base_cost=:base_cost
+		duration_days=:duration_days, bandwidth_gb=:bandwidth_gb, base_cost=:base_cost,
+		provider_ids=:provider_ids
 		WHERE id=:id`
 	if _, err := r.db.NamedExecContext(ctx, q, p); err != nil {
 		return fmt.Errorf("ProductRepository.Update: %w", err)

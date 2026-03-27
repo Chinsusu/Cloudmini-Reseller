@@ -251,7 +251,7 @@ func (h *Handler) AdminListProducts(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/admin/proxy/products
 func (h *Handler) AdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProviderID   string  `json:"provider_id"`
+		ProviderIDs  []string `json:"provider_ids"`
 		Name         string  `json:"name"`
 		ProxyType    string  `json:"proxy_type"`
 		Protocol     string  `json:"protocol"`
@@ -265,11 +265,10 @@ func (h *Handler) AdminCreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	baseCost, _ := decimal.NewFromString(req.BaseCost)
-	providerID, _ := uuid.Parse(req.ProviderID)
 
 	product := &domain.Product{
 		ID:           uuid.New(),
-		ProviderID:   providerID,
+		ProviderIDs:  req.ProviderIDs,
 		Name:         req.Name,
 		ProxyType:    req.ProxyType,
 		Protocol:     req.Protocol,
@@ -305,6 +304,7 @@ func (h *Handler) AdminToggleProduct(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	productID := mustParseUUID(chi.URLParam(r, "id"))
 	var req struct {
+		ProviderIDs  []string `json:"provider_ids"`
 		Name         string  `json:"name"`
 		ProxyType    string  `json:"proxy_type"`
 		Protocol     string  `json:"protocol"`
@@ -319,7 +319,7 @@ func (h *Handler) AdminUpdateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	baseCost, _ := decimal.NewFromString(req.BaseCost)
 	p := &domain.Product{
-		ID: productID, Name: req.Name, ProxyType: req.ProxyType,
+		ID: productID, ProviderIDs: req.ProviderIDs, Name: req.Name, ProxyType: req.ProxyType,
 		Protocol: req.Protocol, Location: req.Location,
 		DurationDays: req.DurationDays, BaseCost: baseCost,
 	}
@@ -524,7 +524,16 @@ func (h *Handler) GetProductGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch provider
-	provider, err := h.providerRepo.GetByID(r.Context(), product.ProviderID)
+	if len(product.ProviderIDs) == 0 {
+		apierror.RespondJSON(w, http.StatusOK, []any{})
+		return
+	}
+	pid, err := uuid.Parse(product.ProviderIDs[0])
+	if err != nil {
+		apierror.RespondJSON(w, http.StatusOK, []any{})
+		return
+	}
+	provider, err := h.providerRepo.GetByID(r.Context(), pid)
 	if err != nil || provider.AdapterType != "vpm" {
 		apierror.RespondJSON(w, http.StatusOK, []any{}) // no groups for non-VPM
 		return

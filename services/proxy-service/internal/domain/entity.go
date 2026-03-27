@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
@@ -39,7 +40,7 @@ type Provider struct {
 // Product entity.
 type Product struct {
 	ID           uuid.UUID        `db:"id"            json:"id"`
-	ProviderID   uuid.UUID        `db:"provider_id"   json:"provider_id"`
+	ProviderIDs  pq.StringArray   `db:"provider_ids"  json:"provider_ids"`
 	Name         string           `db:"name"          json:"name"`
 	ProxyType    string           `db:"proxy_type"    json:"proxy_type"`
 	Protocol     string           `db:"protocol"      json:"protocol"`

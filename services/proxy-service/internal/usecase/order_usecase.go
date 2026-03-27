@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,6 +107,23 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		return nil, fmt.Errorf("CreateOrder step1: product is not active")
 	}
 
+	// ── Select Provider (Load Balancing) ───────────────────────────────────
+	var activeProviders []uuid.UUID
+	for _, pidStr := range product.ProviderIDs {
+		pid, err := uuid.Parse(pidStr)
+		if err != nil {
+			continue
+		}
+		p, err := u.providerRepo.GetByID(ctx, pid)
+		if err == nil && p.IsActive {
+			activeProviders = append(activeProviders, pid)
+		}
+	}
+	if len(activeProviders) == 0 {
+		return nil, domain.ErrNoProviderAvailable
+	}
+	selectedProviderID := activeProviders[rand.Intn(len(activeProviders))]
+
 	// ── Step 2: Calculate price ────────────────────────────────────────────
 	unitPrice, err := u.billingClient.CalculatePrice(ctx, product.BaseCost, "proxy", product.ID, req.ResellerID)
 	if err != nil {
@@ -120,7 +138,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 		UserID:         req.UserID,
 		ResellerID:     req.ResellerID,
 		ProductID:      req.ProductID,
-		ProviderID:     product.ProviderID,
+		ProviderID:     selectedProviderID,
 		Status:         domain.OrderPending,
 		Quantity:       req.Quantity,
 		UnitPrice:      unitPrice,
@@ -148,7 +166,7 @@ func (u *OrderUsecase) CreateOrder(ctx context.Context, req CreateOrderRequest) 
 	}
 
 	// ── Step 4: Purchase from provider ─────────────────────────────────────
-	provider := u.providerReg.Get(product.ProviderID.String())
+	provider := u.providerReg.Get(selectedProviderID.String())
 	if provider == nil {
 		// Compensate: release hold
 		_ = u.billingClient.ReleaseHold(ctx, req.UserID, totalAmount, "proxy_order", order.ID, "")
